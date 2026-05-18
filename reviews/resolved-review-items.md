@@ -332,6 +332,97 @@ Verification:
 Codex re-reviewed `feature/db-schema` at `cc40d3d` on 2026-05-18. `npm run db:validate`, `npm run db:generate`, `npx prisma migrate diff --from-empty --to-schema-datamodel prisma/schema.prisma --script`, and `git diff --check` all pass for the locally verifiable surface. Original review-003 B001 and I001-I004 are resolved. One new docs-only Nice-to-have remains: the ER diagram type labels should be refreshed to match the final schema.
 Status: Re-verified by Codex 2026-05-18.
 
+## review-002 B001: POST /api/v1/sessions skipped Zod body validation
+
+Source: `reviews/review-002-api.md`
+
+Resolved in:
+- `lib/api/parse-body.ts` (new helper)
+- `app/api/v1/sessions/route.ts` (wired through the helper with `z.object({}).strict()`)
+
+Verification:
+cURL matrix on `npm run start`: wrong / missing `Content-Type` → 400 `BAD_REQUEST`; malformed JSON → 400 `BAD_REQUEST`; unknown field → 422 `VALIDATION_ERROR` with `fields._: "Unrecognized key(s)..."`; valid `{}` → DB call (500 INTERNAL_ERROR until T-102 Supabase). Helper is reusable by future POST/PATCH handlers per ADR-005.
+Status: Resolved 2026-05-18.
+
+## review-002 I001: server-only modules unprotected from client imports
+
+Source: `reviews/review-002-api.md`
+
+Resolved in:
+- `lib/session.ts`, `lib/db.ts`, `lib/env.ts` (`import "server-only"` at top)
+- `lib/progress.ts` (new pure module — extracted `STEP_ORDER` and `computeCurrentStep` so the future frontend can import them without dragging server code)
+
+Verification:
+`next build` passes. Importing any of the three server-only modules from a client component would now fail at build time with a clear error.
+Status: Resolved 2026-05-18.
+
+## review-002 I002: ALREADY_PAID error code contradicted ADR-012
+
+Source: `reviews/review-002-api.md`
+
+Resolved in:
+- `lib/api/errors.ts` (removed `ALREADY_PAID` from `ERROR_CODES`)
+
+Verification:
+`grep -rn ALREADY_PAID lib/ app/ docs/` returns no live code references; only historical mentions remain in `memory/decisions.md` (ADR-006 / ADR-012 rationale) and `memory/open-questions.md` (Q-006 history), which are correct as the historical record.
+Status: Resolved 2026-05-18.
+
+## review-002 I003: ErrorFields type too narrow for documented API
+
+Source: `reviews/review-002-api.md`
+
+Resolved in:
+- `lib/api/errors.ts` (`ErrorFields = Record<string, string | string[]>`)
+
+Verification:
+The future `INCOMPLETE_ASSESSMENT` envelope can now carry `{ missingSteps: ["weight", "activity"] }` (per `docs/04` §4) without ad-hoc stringification or fighting the shared helper.
+Status: Resolved 2026-05-18.
+
+## review-002 I004: T-105 marked shipped before live DB verification
+
+Source: `reviews/review-002-api.md`
+
+Resolved in:
+- `memory/task-board.md` (Review-column entry now reads "code shipped, awaits DB smoke + Codex re-review"; explicit list of what to verify against a migrated DB)
+- `README.md` (Day-1 row now 🟡 for `feature/session-progress-api`, not ✅)
+
+Verification:
+T-105 stays in the Review column (not Done). Live DB smoke is queued for the moment T-102 (Supabase) closes.
+Status: Resolved 2026-05-18.
+
+## review-002 N001: response shape ahead of API doc
+
+Source: `reviews/review-002-api.md`
+
+Resolved in:
+- `docs/04-api-design.md` §1 and §2
+
+Verification:
+Both `POST /api/v1/sessions` and `GET /api/v1/sessions/me` now document the canonical session DTO including `createdAt` and `answers` (which is `{}` on a fresh session). The implementation already matched; the doc is now in sync.
+Status: Resolved 2026-05-18.
+
+## review-002 N002: README setup comment stale
+
+Source: `reviews/review-002-api.md`
+
+Resolved in:
+- `README.md` Setup section
+
+Verification:
+`SESSION_COOKIE_SECRET` is now flagged as required from `feature/session-progress-api` onward (`lib/env.ts` enforces min 32 chars at boot), with an `openssl rand -base64 48` hint.
+Status: Resolved 2026-05-18.
+
+## review-002 N003: no unit tests for pure session helpers
+
+Source: `reviews/review-002-api.md`
+
+Resolved in:
+- `memory/task-board.md` (T-203 already covers the requested boundary tests; this finding is the deferral path Codex itself proposed)
+
+Verification:
+Acknowledged as deferred until T-203 lands the Vitest setup on Day 2. No code change on this branch.
+Status: Deferred to T-203 (per Codex's suggested fallback).
+
 ## review-003 (re-review) N004: ER diagram type labels stale after schema fixes
 
 Source: `reviews/review-003-db.md` re-review

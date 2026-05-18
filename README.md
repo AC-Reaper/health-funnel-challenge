@@ -46,7 +46,7 @@ verification are waiting on Supabase provisioning (T-102).
 
 | Day | What lands here |
 | - | - |
-| Day 1 | ✅ `package.json` + Prisma schema + first migration (`feature/db-schema`). ✅ Next.js 14 App Router skeleton + `lib/session.ts` + `POST /api/v1/sessions` + `GET /api/v1/sessions/me` + `GET /api/v1/healthz` (`feature/session-progress-api`, awaits Codex `review-002-api.md`). |
+| Day 1 | ✅ `package.json` + Prisma schema + first migration (`feature/db-schema`, merged). 🟡 Next.js 14 App Router skeleton + `lib/session.ts` + `POST /api/v1/sessions` + `GET /api/v1/sessions/me` + `GET /api/v1/healthz` (`feature/session-progress-api`): code committed and offline paths verified; DB-touching happy-paths still need T-102 (Supabase) and Codex re-review of review-002-api before merge. |
 | Day 2 | Zod step schemas, `PATCH /api/v1/sessions/me/steps/:stepKey` with first-incomplete-step rule, boundary tests. |
 | Day 3 | `lib/health/calculator.ts`, `POST /api/v1/sessions/me/submit`, two-serializer `GET /api/v1/results/me`, `POST /api/v1/pay`. |
 | Day 4 | Funnel UI, `/pay` browser page, Vercel + Supabase deploy, full README (env vars, cookie-jar cURL block, Postman collection). |
@@ -84,8 +84,9 @@ npm install
 cp .env.example .env
 # fill DATABASE_URL (Supabase pooled, port 6543) and
 # DIRECT_URL (Supabase direct, port 5432).
-# SESSION_COOKIE_SECRET is not yet read by any code on `main`; set
-# anything (will be enforced from feature/session-progress-api).
+# SESSION_COOKIE_SECRET is required from feature/session-progress-api
+# onward (lib/env.ts enforces min 32 chars at boot). Generate with:
+#   openssl rand -base64 48
 
 # 4. Generate Prisma client (no DB required)
 npm run db:generate

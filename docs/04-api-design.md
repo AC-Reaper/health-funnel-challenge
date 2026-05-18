@@ -87,12 +87,14 @@ All errors share one envelope, regardless of status code:
 `POST /api/v1/sessions`
 
 - **Auth**: none.
-- **Body**: `{}` (empty). Reserved for future onboarding metadata.
+- **Body**: `{}` (empty). Validated by `z.object({}).strict()`; any
+  unknown field is rejected with `422 VALIDATION_ERROR`. Wrong
+  `Content-Type` or malformed JSON returns `400 BAD_REQUEST`.
 - **Behaviour**:
   - If a valid `hfc_session` cookie is present and points to an existing
     session, return that session and reuse the cookie.
   - Otherwise create a new `session` row, set the cookie, return the session.
-- **200 OK**
+- **200 OK** — Canonical session DTO (same shape as §2):
   ```json
   {
     "sessionId": "1a2b…",
@@ -100,9 +102,12 @@ All errors share one envelope, regardless of status code:
     "currentStep": "gender",
     "entitlementStatus": "free",
     "submitted": false,
-    "createdAt": "2026-05-18T09:30:00.000Z"
+    "createdAt": "2026-05-18T09:30:00.000Z",
+    "answers": {}
   }
   ```
+  `answers` is always present, even for a freshly created session (in
+  which case it is `{}`). Null fields inside `answers` are omitted.
 - **Headers set**: `Set-Cookie: hfc_session=…; HttpOnly; Secure; SameSite=Lax; Path=/; Max-Age=2592000`.
 
 ---
@@ -115,7 +120,8 @@ All errors share one envelope, regardless of status code:
 - **Behaviour**: returns the current funnel state. `currentStep` is
   recomputed server-side as the first incomplete required step. `answers`
   contains only the steps the user has saved (omits null fields).
-- **200 OK**
+- **200 OK** — Same canonical session DTO as §1, with `answers`
+  populated according to saved steps:
   ```json
   {
     "sessionId": "1a2b…",
@@ -123,6 +129,7 @@ All errors share one envelope, regardless of status code:
     "currentStep": "weight",
     "entitlementStatus": "free",
     "submitted": false,
+    "createdAt": "2026-05-18T09:30:00.000Z",
     "answers": {
       "gender": "female",
       "mainGoal": "lose_weight",
