@@ -10,3 +10,4 @@
 - 2026-05-18: Reviewed `feature/db-schema` and wrote `reviews/review-003-db.md`. Main blocker: `result.bmi decimal(4,2)` cannot store all validation-accepted boundary BMI values; branch should not merge until widened.
 - 2026-05-18: Re-reviewed `feature/db-schema` at `cc40d3d`. Original review-003 Blocking and Important findings are resolved; only a docs-only ER diagram type-label nit remains.
 - 2026-05-18: Reviewed `feature/session-progress-api` and wrote interim `reviews/review-002-api.md`. Main blocker: `POST /api/v1/sessions` skips Zod/body validation despite ADR-005.
+- 2026-05-18: Re-reviewed `feature/session-progress-api` at `11098e3`. Body validation, server-only boundaries, stale payment code, and DTO docs are fixed locally; live `POST /sessions` happy-path smoke remains pending on T-102.

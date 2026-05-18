@@ -131,3 +131,40 @@ References:
 References:
 - `lib/session.ts:36-80`
 - `lib/session.ts:104-123`
+
+## Re-review — 2026-05-18
+
+Branch reviewed: `feature/session-progress-api` at `11098e3`
+
+Verification run:
+- `npm run typecheck` — pass
+- `npm run build` — pass
+- Local smoke with `next dev -p 3010 -H 127.0.0.1`:
+  - `GET /api/v1/healthz` → 200 with `x-request-id`
+  - `GET /api/v1/sessions/me` without cookie → 401 `NO_SESSION`
+  - `GET /api/v1/sessions/me` with tampered cookie → 401 `NO_SESSION`
+  - `POST /api/v1/sessions` without JSON content type → 400 `BAD_REQUEST`
+  - `POST /api/v1/sessions` with malformed JSON → 400 `BAD_REQUEST`
+  - `POST /api/v1/sessions` with unknown field → 422 `VALIDATION_ERROR`
+  - `POST /api/v1/sessions` with valid `{}` reaches Prisma and returns 500 `INTERNAL_ERROR` only because the local `.env` points at the placeholder DB; live success-path verification remains blocked on T-102
+
+### Blocking
+
+None. B001 is resolved: `POST /api/v1/sessions` now goes through `parseJsonBody` with `z.object({}).strict()` before any DB access.
+
+### Important
+
+No new Important findings.
+
+I001-I003 are resolved:
+- I001: server-only modules now import `server-only`; client-safe progress logic was split into `lib/progress.ts`.
+- I002: `ALREADY_PAID` is removed from live error codes.
+- I003: `ErrorFields` now supports `string | string[]`.
+
+I004 is correctly tracked but not fully closed: README and task-board now say the code is shipped but live DB smoke is still pending. The actual `POST /sessions` happy path, cookie reuse, `GET /sessions/me` with a real cookie, and deleted-session-cookie branch still require T-102 Supabase + migrated DB.
+
+### Nice-to-have
+
+N001 and N002 are resolved. N003 is accepted as a deferred test item for T-203, matching the original suggested fallback. No new Nice-to-have findings.
+
+Merge recommendation: do not merge to `main` until T-102 enables live DB smoke for the session happy path. From the locally verifiable API surface, the prior Blocking item is fixed.
