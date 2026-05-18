@@ -2,7 +2,7 @@
 
 ## Status
 
-Open — 2026-05-18
+Resolved — 2026-05-18 re-review
 
 Branch reviewed: `feature/db-schema`
 
@@ -118,3 +118,40 @@ References:
 
 References:
 - `docs/03-database-design.md:196-201`
+
+## Re-review — 2026-05-18
+
+Branch reviewed: `feature/db-schema` at `cc40d3d`
+
+Verification run:
+- `npm run db:validate` — pass
+- `npm run db:generate` — pass
+- `npx prisma migrate diff --from-empty --to-schema-datamodel prisma/schema.prisma --script` — matches the committed migration except for the two intentional SQL-only additions documented in `docs/03-database-design.md`: `pgcrypto` extension and `payment_one_success_per_session_idx`
+- `git diff --check` — pass
+
+### Blocking
+
+None. B001 is resolved: `Result.bmi` is now `decimal(5,2)` in Prisma, migration SQL, and the table reference.
+
+### Important
+
+None. I001–I004 are resolved:
+- I001: SQL-only partial unique index now backstops one successful payment per session.
+- I002: `Session.updatedAt` and `Assessment.updatedAt` now use Prisma `@updatedAt`.
+- I003: `Payment.idempotencyKey` is `varchar(128)` and `currency` is `char(3)`.
+- I004: API example now shows a UUID-shaped `paymentId`.
+
+### Nice-to-have
+
+#### N004 — ER diagram type labels are stale after the schema fixes
+
+- Impact range: `docs/03-database-design.md` ER diagram only.
+- Risk reason: The table reference and Prisma schema are correct, but the Mermaid diagram still labels `RESULT.bmi` as `decimal_4_2` and `PAYMENT.idempotency_key` / `PAYMENT.currency` as `text`. This does not affect runtime behaviour, but the DB diagram is one of the stated deliverables, so stale type labels slightly weaken evaluator trust.
+- Suggested fix: Update the diagram labels to `decimal_5_2`, `varchar_128`, and `char_3`.
+
+References:
+- `docs/03-database-design.md:67`
+- `docs/03-database-design.md:80`
+- `docs/03-database-design.md:83`
+
+Merge recommendation: okay to merge after Claude either fixes N004 directly or records it as a small docs polish item. No Blocking or Important findings remain.
