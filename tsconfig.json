@@ -21,8 +21,17 @@
     "paths": {
       "@/lib/*": ["lib/*"],
       "@/app/*": ["app/*"]
-    }
+    },
+    "plugins": [{ "name": "next" }]
   },
-  "include": ["app/**/*.ts", "app/**/*.tsx", "lib/**/*.ts", "tests/**/*.ts", "scripts/**/*.ts"],
+  "include": [
+    "next-env.d.ts",
+    "app/**/*.ts",
+    "app/**/*.tsx",
+    "lib/**/*.ts",
+    "tests/**/*.ts",
+    "scripts/**/*.ts",
+    ".next/types/**/*.ts"
+  ],
   "exclude": ["node_modules", ".next", "dist"]
 }
