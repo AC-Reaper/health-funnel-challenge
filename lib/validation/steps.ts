@@ -91,5 +91,9 @@ export type StepBody = {
 };
 
 export function isStepKey(value: string): value is StepKey {
-  return value in STEP_SCHEMAS;
+  // `Object.hasOwn` (not the `in` operator) so inherited keys like
+  // `toString`, `__proto__`, `constructor` are correctly rejected — they
+  // would otherwise pass the guard and trigger a 500 inside the route
+  // when STEP_SCHEMAS[key] turns out to be a function from Object.prototype.
+  return Object.hasOwn(STEP_SCHEMAS, value);
 }

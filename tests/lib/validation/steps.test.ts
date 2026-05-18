@@ -16,6 +16,21 @@ describe("isStepKey", () => {
       expect(isStepKey(key)).toBe(false);
     },
   );
+
+  // review-002 B002: inherited Object.prototype keys must not pass
+  // the guard. Using `in` (the previous implementation) accepts them
+  // and turns hostile input into a 500 inside the route.
+  it.each([
+    "toString",
+    "constructor",
+    "__proto__",
+    "hasOwnProperty",
+    "valueOf",
+    "isPrototypeOf",
+    "propertyIsEnumerable",
+  ])('rejects inherited Object.prototype key "%s"', (key) => {
+    expect(isStepKey(key)).toBe(false);
+  });
 });
 
 describe("STEP_SCHEMAS.gender", () => {
