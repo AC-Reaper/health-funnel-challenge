@@ -180,16 +180,22 @@ function computeCurveAndDate(input: CalculatorInput): {
   const weeklyStep = direction * weeklyMagnitude;
   const fullWeeks = Math.ceil(Math.abs(totalDelta) / weeklyMagnitude);
   const weeks = Math.min(fullWeeks, MAX_CURVE_WEEKS);
+  const isTruncated = fullWeeks > MAX_CURVE_WEEKS;
 
   const curvePoints: CurvePoint[] = [];
   for (let w = 0; w <= weeks; w++) {
-    const projected = w === weeks ? target : start + weeklyStep * w;
+    // Snap to the requested target ONLY at the natural endpoint of an
+    // un-truncated plan. Truncated curves (review-006 I002) emit the
+    // linearly-projected weight at week 52 instead, so the response does
+    // not simultaneously claim "date unknown" and "target reached".
+    const projected =
+      !isTruncated && w === weeks ? target : start + weeklyStep * w;
     curvePoints.push({ week: w, weightKg: round2(projected) });
   }
 
-  if (weeks >= MAX_CURVE_WEEKS) {
+  if (isTruncated) {
     // The path is too long to reach target within a year at the safe rate.
-    // Still emit a 1-year preview, but flag the date as unknown.
+    // Emit the 1-year preview, but flag the date as unknown.
     return { curvePoints, predictedTargetDate: null };
   }
 

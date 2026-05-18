@@ -194,6 +194,26 @@ describe("compute", () => {
     expect(out.curvePoints).toEqual([{ week: 0, weightKg: 100 }]);
   });
 
+  // review-006 I002 — exactly 30% delta is not short-circuited, but the
+  // resulting 75 kg loss at 0.5 kg/week needs 150 weeks. The curve must
+  // truncate at week 52 without snapping the final point to the goal,
+  // and the predictedTargetDate must remain null to match.
+  it("truncated curves do not snap the final point to target (review-006 I002)", () => {
+    const out = compute(
+      inputBase({
+        mainGoal: "lose_weight",
+        weightKg: 250,
+        targetWeightKg: 175,
+      }),
+    );
+    expect(out.predictedTargetDate).toBeNull();
+    expect(out.plan.note).toBeNull(); // not unrealistic per the 30% rule
+    expect(out.curvePoints.at(-1)?.week).toBe(52);
+    // 250 - 0.5 * 52 = 224, not the goal 175.
+    expect(out.curvePoints.at(-1)?.weightKg).toBe(224);
+    expect(out.curvePoints.at(0)?.weightKg).toBe(250);
+  });
+
   it("is pure (same input → deep-equal output)", () => {
     const a = compute(inputBase());
     const b = compute(inputBase());
