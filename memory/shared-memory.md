@@ -85,7 +85,7 @@ payment.
 - Test suite → `tests/**` (vitest, 160 tests)
 - ADR log → `memory/decisions.md` (ADR-001…013 Accepted)
 - Open questions → `memory/open-questions.md` (no open blocker)
-- Latest reviews → `reviews/review-003-db.md` (Resolved on `main`); `reviews/review-002-api.md` Resolved through the `feature/funnel-persistence-api` step API surface.
+- Latest reviews → `reviews/review-006-day3.md` (Open: 1 Blocking, 2 Important, 3 Nice-to-have on `feature/assessment-result-api`); `reviews/review-002-api.md` and `reviews/review-003-db.md` are resolved for earlier branches.
 
 ## Current Branch
 
@@ -96,8 +96,9 @@ calculator, idempotent `POST /sessions/me/submit`, gated two-serializer
 `/results` browser pages. 160 unit tests, live cookie-jar smoke against
 Supabase covers 11 happy + sad paths. `feature/db-schema`,
 `feature/session-progress-api`, and `feature/funnel-persistence-api`
-are all merged into `main`. Branch awaits Codex review of the Day-3
-surface before merge.
+are all merged into `main`. Codex reviewed the Day-3 surface in
+`reviews/review-006-day3.md`; the branch should not merge until B001 is
+addressed and re-reviewed.
 
 ## Code Management
 

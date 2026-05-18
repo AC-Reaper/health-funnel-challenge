@@ -23,3 +23,4 @@
 | review-003-db | Database | Resolved | Re-reviewed `feature/db-schema` on 2026-05-18. Original 1 Blocking + 4 Important are resolved; 1 docs-only Nice-to-have remains. |
 | review-004-final | Final | Pending | Triggers Day 5 after T-501. |
 | review-005-governance-scaffold | Governance scaffold | Resolved-in-design | No Blocking findings. Claude addressed I001/I002/I003/I005/N001/N002; Codex recorded Owner decisions for Q-002/Q-003/Q-006 and resolved I004 in design. |
+| review-006-day3 | Day-3 submit/result/pay | Open | Reviewed `feature/assessment-result-api` at `d79959c`: 1 Blocking, 2 Important, 3 Nice-to-have. Main blocker is missing committed idempotency regression tests for `/submit` and `/pay`. |
