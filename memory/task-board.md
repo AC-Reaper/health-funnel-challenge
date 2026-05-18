@@ -11,10 +11,7 @@ Owner is who does the work; reviews follow the AGENTS.md §5 flow.
 
 ### Day 2 — Funnel persistence
 
-- T-201 — Claude — Zod step schemas in `lib/validation/steps.ts`
-- T-202 — Claude — `PATCH /api/v1/sessions/me/steps/:stepKey` with first-incomplete-step rule (ADR-008)
-- T-203 — Claude — Boundary tests (age 12/13/100/101; weight 0; target_weight vs goal coherence; out-of-order rejection)
-- T-204 — Claude requests `reviews/review-002-api.md`; Codex writes it
+(All shipped on `feature/funnel-persistence-api`; see Review column.)
 
 ### Day 3 — Submit / calculate / gate / pay
 
@@ -44,7 +41,7 @@ Owner is who does the work; reviews follow the AGENTS.md §5 flow.
 
 ## Review
 
-- T-101 / T-104 / T-105 — Claude — `feature/session-progress-api`: code shipped + all four DB-touching paths from review-002 I004 verified against live Supabase (POST /sessions create, POST /sessions cookie reuse, GET /sessions/me with valid cookie, GET /sessions/me after manual session DELETE → 401). Awaits Codex re-review of `reviews/review-002-api.md` before merge to `main`.
+- T-201 / T-202 / T-203 — Claude — `feature/funnel-persistence-api` shipped: `lib/validation/steps.ts` (6 Zod step schemas), `lib/assessment.ts` (upsert + weight coherence helper), `app/api/v1/sessions/me/steps/[stepKey]/route.ts` (PATCH handler with first-incomplete-step rule and weight×main_goal coherence), `vitest.config.ts` + `tests/setup.ts` + 4 unit test files (67 tests, all green). `tsc --noEmit` + `next build` + live cookie-jar smoke against Supabase (13 paths incl. 401/200/409 STEP_OUT_OF_ORDER/422 boundary/422 weight-coherence/400 unknown-step) all pass. Closes review-002 N003 (unit tests for pure helpers) by ride-along. Awaits Codex re-review of `reviews/review-002-api.md` covering the step API surface (T-204) before merge to `main`.
 
 ## Done
 
@@ -71,3 +68,6 @@ Owner is who does the work; reviews follow the AGENTS.md §5 flow.
 - 2026-05-18 — Codex — `reviews/review-002-api.md` (1 Blocking, 4 Important, 3 Nice-to-have).
 - 2026-05-18 — Owner + Claude — T-102 Supabase project provisioned (region `aws-1-us-east-1`, pooler URL on port 6543, direct URL on port 5432). Password URL-encoded (`/` → `%2F`) and written to local `.env` (gitignored). `npm run db:deploy` applied initial migration cleanly; introspection confirms 4 tables + 8 native enums + partial unique index `payment_one_success_per_session_idx` + FK delete actions (CASCADE on assessment/result, RESTRICT on payment) match `prisma/schema.prisma` and `docs/03-database-design.md`. Cookie-jar smoke test against live DB verified all four paths from review-002 I004.
 - 2026-05-18 — Claude — Adopted 7/8 review-002 findings on `feature/session-progress-api`. New: `lib/api/parse-body.ts` + `lib/progress.ts`. Changed: `POST /api/v1/sessions` validates `z.object({}).strict()` (B001); `lib/session.ts`/`lib/db.ts`/`lib/env.ts` now `import "server-only"` (I001); `computeCurrentStep` + `STEP_ORDER` moved to pure `lib/progress.ts` (I001); `ALREADY_PAID` removed from `ERROR_CODES` (I002); `ErrorFields = Record<string, string | string[]>` (I003); `docs/04` canonicalised the session DTO with `createdAt` + `answers:{}` on both endpoints (N001); README env comment now states `SESSION_COOKIE_SECRET` is required from this branch onward with `openssl rand -base64 48` hint (N002); T-105 wording in README/task-board now says code shipped but pending DB smoke + re-review (I004). N003 unit tests deferred to T-203 (Codex's recommendation). `tsc --noEmit` + `next build` pass; cURL matrix verifies `BAD_REQUEST` / `VALIDATION_ERROR` / `INTERNAL_ERROR` envelopes.
+- 2026-05-18 — Codex — Live-smoke clearance on `db992ab`: review-002 status flipped to Resolved for T-101/T-104/T-105.
+- 2026-05-18 — Claude — Merged `feature/session-progress-api` into `main` with `--no-ff` (merge commit `0bda115`); deleted the feature branch.
+- 2026-05-18 — Claude — Created `feature/funnel-persistence-api`; shipped T-201 (Zod step schemas with `.strict()` per step), T-202 (PATCH /sessions/me/steps/:stepKey with first-incomplete-step rule, weight×main_goal coherence check, idempotent upsert, full canonical SessionDTO response; `docs/04 §3` updated), T-203 (vitest + 67 unit tests across cookies / progress / step schemas / parse-body — closes review-002 N003 by ride-along). Five commits, all Conventional. Live cookie-jar smoke against Supabase verified the 13-step happy + sad path matrix.

@@ -422,11 +422,16 @@ Status: Resolved 2026-05-18.
 Source: `reviews/review-002-api.md`
 
 Resolved in:
-- `memory/task-board.md` (T-203 already covers the requested boundary tests; this finding is the deferral path Codex itself proposed)
+- `vitest.config.ts` + `tests/setup.ts` + `tests/_shims/server-only.ts` (Vitest 4 setup)
+- `tests/lib/session.test.ts` (8 tests: round-trip, tampered sig, wrong-length sig, sig-valid-for-different-sid, malformed base64url, base64-of-non-JSON, missing fields, undefined/empty)
+- `tests/lib/progress.test.ts` (8 tests: null assessment, empty row, single-field-gap progression, weight requires both fields, fully populated)
+- `tests/lib/validation/steps.test.ts` (covers boundary + enum + integer + `.strict()` for all 6 step schemas)
+- `tests/lib/api/parse-body.test.ts` (6 tests: missing/wrong content-type, malformed JSON, schema failure with fields, unknown keys, success)
+- `package.json` `test` script
 
 Verification:
-Acknowledged as deferred until T-203 lands the Vitest setup on Day 2. No code change on this branch.
-Status: Deferred to T-203 (per Codex's suggested fallback).
+67 tests across 4 files, all green via `npm test`. Shipped on `feature/funnel-persistence-api` alongside T-201/T-202.
+Status: Resolved 2026-05-18 by T-203.
 
 ## review-002 re-review: local API fixes verified
 

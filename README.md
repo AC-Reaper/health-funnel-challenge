@@ -46,8 +46,8 @@ verification are waiting on Supabase provisioning (T-102).
 
 | Day | What lands here |
 | - | - |
-| Day 1 | ✅ `package.json` + Prisma schema + first migration (`feature/db-schema`, merged). 🟡 Next.js 14 App Router skeleton + `lib/session.ts` + `POST /api/v1/sessions` + `GET /api/v1/sessions/me` + `GET /api/v1/healthz` (`feature/session-progress-api`): code committed and offline paths verified; DB-touching happy-paths still need T-102 (Supabase) and Codex re-review of review-002-api before merge. |
-| Day 2 | Zod step schemas, `PATCH /api/v1/sessions/me/steps/:stepKey` with first-incomplete-step rule, boundary tests. |
+| Day 1 | ✅ `package.json` + Prisma schema + first migration (`feature/db-schema`, merged). ✅ Next.js 14 App Router skeleton + `lib/session.ts` + first 3 endpoints (`feature/session-progress-api`, merged after live Supabase smoke). |
+| Day 2 | ✅ Zod step schemas (`lib/validation/steps.ts`) + `PATCH /api/v1/sessions/me/steps/:stepKey` with first-incomplete-step + weight-coherence rules + vitest setup with 67 unit tests (`feature/funnel-persistence-api`, awaits Codex re-review of `review-002-api.md` covering the step API). |
 | Day 3 | `lib/health/calculator.ts`, `POST /api/v1/sessions/me/submit`, two-serializer `GET /api/v1/results/me`, `POST /api/v1/pay`. |
 | Day 4 | Funnel UI, `/pay` browser page, Vercel + Supabase deploy, full README (env vars, cookie-jar cURL block, Postman collection). |
 | Day 5 | Edge-case hardening, optional `step_event`, schema diagram, AI collaboration log, Codex final review. |
