@@ -2,7 +2,7 @@
 
 ## Status
 
-Open — 2026-05-19
+Resolved — 2026-05-19
 
 Branch reviewed: `feature/assessment-result-api` at `d79959c`
 
@@ -102,3 +102,31 @@ References:
 References:
 - `app/pay/page.tsx:14-32`
 - `app/api/v1/pay/route.ts:29-50`
+
+## Re-review — 2026-05-19
+
+Commit reviewed: `7b17949`
+
+Verification run:
+- `npm run typecheck` — pass
+- `npm test` — pass, 175 tests
+- `npm run build` — pass
+
+### Blocking
+
+None. B001 is resolved: `/submit` and `/pay` now have committed state-machine tests through `SubmitTxOps` and `PaymentTxOps` seams. The tests cover first submit, submit replay/P2002 recovery, session-status flip, first pay, same-key replay, already-paid/new-key no-op, same-key pre-paid recovery, and a P2002 insert race.
+
+### Important
+
+No open Important findings remain.
+
+I001 is resolved: `FULL_ASSESSMENT_SCHEMA.superRefine()` now re-runs the shared weight × goal coherence rule before `/submit` can call `compute()`.
+
+I002 is resolved: truncated curves no longer snap the week-52 point to the final target, and the exactly-30%-delta boundary case is covered.
+
+### Nice-to-have
+
+N001 and N002 are resolved. N003 is accepted as a Day-4 UX deferral because `/pay` is still a placeholder page and the API remains the source of truth.
+
+Merge recommendation:
+`feature/assessment-result-api` is clear to merge from the Day-3 review perspective. Day-4 review should revisit the browser `/pay` and `/results` UX once the polished funnel UI lands.

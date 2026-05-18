@@ -85,7 +85,7 @@ payment.
 - Test suite → `tests/**` (vitest, 160 tests)
 - ADR log → `memory/decisions.md` (ADR-001…013 Accepted)
 - Open questions → `memory/open-questions.md` (no open blocker)
-- Latest reviews → `reviews/review-006-day3.md` (Open: 1 Blocking, 2 Important, 3 Nice-to-have on `feature/assessment-result-api`); `reviews/review-002-api.md` and `reviews/review-003-db.md` are resolved for earlier branches.
+- Latest reviews → `reviews/review-006-day3.md` (Resolved at `7b17949`; Day-3 submit/result/pay is mergeable); `reviews/review-002-api.md` and `reviews/review-003-db.md` are resolved for earlier branches.
 
 ## Current Branch
 
@@ -97,8 +97,9 @@ calculator, idempotent `POST /sessions/me/submit`, gated two-serializer
 Supabase covers 11 happy + sad paths. `feature/db-schema`,
 `feature/session-progress-api`, and `feature/funnel-persistence-api`
 are all merged into `main`. Codex reviewed the Day-3 surface in
-`reviews/review-006-day3.md`; the branch should not merge until B001 is
-addressed and re-reviewed.
+`reviews/review-006-day3.md` and re-reviewed closeout commit `7b17949`;
+no open Blocking/Important Day-3 findings remain, so the branch is
+mergeable.
 
 ## Code Management
 

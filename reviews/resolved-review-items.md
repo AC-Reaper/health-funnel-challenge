@@ -622,6 +622,28 @@ Verification:
 Codex's own suggested fix targets the Day-4 funnel UI branch (`feature/frontend-funnel`). The `/pay` page is a Day-3 placeholder; the polished UX gate (no-session → `/`, not-submitted → "submit first" copy, submitted+free → pay CTA) lands when the full funnel UI lands. The API is the source of truth, so this is UX polish, not a security gap.
 Status: Deferred to T-401/T-402.
 
+## review-006 re-review: Day-3 fixes verified at 7b17949
+
+Source: `reviews/review-006-day3.md` Re-review section
+
+Resolved in:
+- `lib/result-repo.ts`
+- `lib/payment.ts`
+- `lib/health/coherence.ts`
+- `lib/validation/assessment.ts`
+- `lib/health/calculator.ts`
+- `tests/lib/result-repo.test.ts`
+- `tests/lib/payment.test.ts`
+- `tests/lib/validation/assessment.test.ts`
+- `tests/lib/health/calculator.test.ts`
+- `docs/04-api-design.md`
+- `README.md`
+- Commit `7b17949` closeout records
+
+Verification:
+Codex re-reviewed closeout commit `7b17949` on 2026-05-19. `npm run typecheck`, `npm test` (175 tests), and `npm run build` all pass. B001 is verified fixed by committed submit/payment state-machine tests using transaction seams. I001 is verified fixed by submit-time `FULL_ASSESSMENT_SCHEMA.superRefine()` coherence checks. I002 is verified fixed by the truncated-curve implementation and boundary test. N001/N002 are fixed in docs. N003 is explicitly deferred to Day-4 browser UX.
+Status: Re-verified by Codex 2026-05-19. No open Blocking or Important Day-3 findings remain.
+
 ## review-003 (re-review) N004: ER diagram type labels stale after schema fixes
 
 Source: `reviews/review-003-db.md` re-review
