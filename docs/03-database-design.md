@@ -64,7 +64,7 @@ erDiagram
     RESULT {
         uuid          id PK
         uuid          session_id FK,UQ
-        decimal_4_2   bmi
+        decimal_5_2   bmi
         bmi_category  bmi_category
         int           daily_calories_kcal
         date          predicted_target_date
@@ -77,10 +77,10 @@ erDiagram
     PAYMENT {
         uuid           id PK
         uuid           session_id FK
-        text           idempotency_key
+        varchar_128    idempotency_key
         payment_status status
         int            amount_cents
-        text           currency
+        char_3         currency
         timestamptz    created_at
     }
 ```

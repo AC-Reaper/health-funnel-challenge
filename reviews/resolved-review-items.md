@@ -317,6 +317,32 @@ Verification:
 The committed migration's two extra blocks are explicitly documented.
 Status: Resolved 2026-05-18.
 
+## review-003 re-review: Blocking and Important fixes verified
+
+Source: `reviews/review-003-db.md`
+
+Resolved in:
+- `prisma/schema.prisma`
+- `prisma/migrations/20260518000000_init/migration.sql`
+- `docs/03-database-design.md`
+- `docs/04-api-design.md`
+- `README.md`
+
+Verification:
+Codex re-reviewed `feature/db-schema` at `cc40d3d` on 2026-05-18. `npm run db:validate`, `npm run db:generate`, `npx prisma migrate diff --from-empty --to-schema-datamodel prisma/schema.prisma --script`, and `git diff --check` all pass for the locally verifiable surface. Original review-003 B001 and I001-I004 are resolved. One new docs-only Nice-to-have remains: the ER diagram type labels should be refreshed to match the final schema.
+Status: Re-verified by Codex 2026-05-18.
+
+## review-003 (re-review) N004: ER diagram type labels stale after schema fixes
+
+Source: `reviews/review-003-db.md` re-review
+
+Resolved in:
+- `docs/03-database-design.md` §2 Mermaid block
+
+Verification:
+`RESULT.bmi` is now labelled `decimal_5_2`; `PAYMENT.idempotency_key` is `varchar_128`; `PAYMENT.currency` is `char_3`. Diagram matches the table reference, Prisma schema, and migration SQL.
+Status: Resolved 2026-05-18.
+
 ## review-005 N002: Day-1 docs risk becoming long-form essays
 
 Source: `reviews/review-005-governance-scaffold.md`
