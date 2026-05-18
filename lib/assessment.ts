@@ -1,9 +1,18 @@
 import "server-only";
 
-import type { Assessment, MainGoal, StepKey } from "@prisma/client";
+import type { Assessment, MainGoal, Prisma, StepKey } from "@prisma/client";
 
 import { db } from "./db";
 import type { StepBody } from "./validation/steps";
+
+/**
+ * Accepts either the singleton Prisma client or an interactive
+ * transaction client. The PATCH route invokes `upsertAssessmentField`
+ * inside `db.$transaction(async (tx) => ...)` so that the assessment
+ * upsert and the `session.current_step` update commit together
+ * (review-002 I006).
+ */
+type Client = Prisma.TransactionClient | typeof db;
 
 type AssessmentFieldPatch = {
   gender?: StepBody["gender"]["gender"];
@@ -26,9 +35,10 @@ export async function upsertAssessmentField<K extends StepKey>(
   sessionId: string,
   stepKey: K,
   patch: StepBody[K],
+  client: Client = db,
 ): Promise<Assessment> {
   const data = stepPatchToColumns(stepKey, patch);
-  return db.assessment.upsert({
+  return client.assessment.upsert({
     where: { sessionId },
     create: { sessionId, ...data },
     update: data,

@@ -16,7 +16,8 @@ import {
   projectAssessment,
   upsertAssessmentField,
 } from "@/lib/assessment";
-import { STEP_ORDER } from "@/lib/progress";
+import { db } from "@/lib/db";
+import { STEP_ORDER, computeCurrentStep } from "@/lib/progress";
 import {
   COOKIE_NAME,
   findAssessmentBySessionId,
@@ -126,17 +127,28 @@ export async function PATCH(
       }
     }
 
-    await upsertAssessmentField(
-      sid,
-      stepKey,
-      patch as Parameters<typeof upsertAssessmentField>[2],
+    // review-002 I006: assessment upsert + session.current_step update
+    // commit as one transaction. Prisma @updatedAt on `session` refreshes
+    // session.updated_at via the .update call, so the cached column and
+    // the timestamp stay in sync with the assessment write.
+    const { freshSession, freshAssessment } = await db.$transaction(
+      async (tx) => {
+        const updatedAssessment = await upsertAssessmentField(
+          sid,
+          stepKey,
+          patch as Parameters<typeof upsertAssessmentField>[2],
+          tx,
+        );
+        const updatedSession = await tx.session.update({
+          where: { id: sid },
+          data: { currentStep: computeCurrentStep(updatedAssessment) },
+        });
+        return {
+          freshSession: updatedSession,
+          freshAssessment: updatedAssessment,
+        };
+      },
     );
-
-    const [freshSession, freshAssessment] = await Promise.all([
-      findSessionById(sid),
-      findAssessmentBySessionId(sid),
-    ]);
-    if (!freshSession) return noSession(requestId);
 
     return NextResponse.json(
       serializeSession(freshSession, freshAssessment),
