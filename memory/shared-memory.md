@@ -75,21 +75,31 @@ payment.
 - Session library → `lib/session.ts`
 - Pure helpers → `lib/progress.ts`, `lib/assessment.ts`
 - Step validation → `lib/validation/steps.ts`
-- Route handlers → `app/api/v1/{healthz,sessions,sessions/me,sessions/me/steps/[stepKey]}/route.ts`
-- Test suite → `tests/**` (vitest, 108 tests)
+- Full-assessment schema → `lib/validation/assessment.ts`
+- Calculator → `lib/health/calculator.ts` (algorithmVersion `v1.0.0-mifflin`)
+- Result repo → `lib/result-repo.ts`
+- Serializers → `lib/serializers/result.ts` (teaser / full DTO types)
+- Payment → `lib/payment.ts` (pure `decidePaymentAction` + transactional `processPayment`)
+- Route handlers → `app/api/v1/{healthz,sessions,sessions/me,sessions/me/steps/[stepKey],sessions/me/submit,results/me,pay}/route.ts`
+- Browser pages → `app/page.tsx`, `app/pay/{page,PayButton}.tsx`, `app/results/page.tsx`
+- Test suite → `tests/**` (vitest, 160 tests)
 - ADR log → `memory/decisions.md` (ADR-001…013 Accepted)
 - Open questions → `memory/open-questions.md` (no open blocker)
-- Latest reviews → `reviews/review-003-db.md` (Resolved on `main`); `reviews/review-002-api.md` Resolved through the `feature/funnel-persistence-api` step API surface.
+- Latest reviews → `reviews/review-006-day3.md` (Resolved at `7b17949`; Day-3 submit/result/pay is mergeable); `reviews/review-002-api.md` and `reviews/review-003-db.md` are resolved for earlier branches.
 
 ## Current Branch
 
-`feature/funnel-persistence-api` — Zod step schemas, the
-`PATCH /api/v1/sessions/me/steps/:stepKey` handler (first-incomplete-step
-+ symmetric weight×main_goal coherence), and vitest with 108 unit tests.
-`feature/db-schema` and `feature/session-progress-api` are merged
-into `main`. T-102 (Supabase) is done; live DB smoke for the step
-endpoint passed. Codex re-reviewed closeout commit `36f8830`; no open
-Blocking/Important step-API findings remain, so the branch is mergeable.
+`feature/assessment-result-api` — Day-3 closed-loop core: pure health
+calculator, idempotent `POST /sessions/me/submit`, gated two-serializer
+`GET /results/me` (with leak invariant), mock `POST /api/v1/pay` with
+`Idempotency-Key` semantics (ADR-006 + ADR-012), and minimal `/pay` +
+`/results` browser pages. 160 unit tests, live cookie-jar smoke against
+Supabase covers 11 happy + sad paths. `feature/db-schema`,
+`feature/session-progress-api`, and `feature/funnel-persistence-api`
+are all merged into `main`. Codex reviewed the Day-3 surface in
+`reviews/review-006-day3.md` and re-reviewed closeout commit `7b17949`;
+no open Blocking/Important Day-3 findings remain, so the branch is
+mergeable.
 
 ## Code Management
 

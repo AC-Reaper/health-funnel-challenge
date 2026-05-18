@@ -34,21 +34,20 @@ Full decision history lives in `memory/decisions.md` (ADR-001…013).
 
 ## Status
 
-Next.js 14 App Router skeleton, signed-cookie session library, and the
-first three `/api/v1` endpoints (`POST /sessions`, `GET /sessions/me`,
-`GET /healthz`) are shipped on `feature/session-progress-api`. DB
-schema and initial migration shipped earlier on `feature/db-schema`.
-ADR-001…013 are accepted and `memory/open-questions.md` has no open
-blocker. Live `prisma migrate deploy` and DB-touching endpoint
-verification are waiting on Supabase provisioning (T-102).
+Day 1–3 features shipped. The full funnel loop runs end-to-end against
+Supabase: anonymous session → 6-step funnel persistence → submit →
+calculator → gated teaser → mock `/pay` → full result. 160 unit tests
+green; live cookie-jar smoke covers happy + sad paths for every
+endpoint. Day-4 work (polished funnel UI + Vercel deploy + finalised
+README cookie-jar walkthrough) is next.
 
 ## To be added (in implementation order)
 
 | Day | What lands here |
 | - | - |
 | Day 1 | ✅ `package.json` + Prisma schema + first migration (`feature/db-schema`, merged). ✅ Next.js 14 App Router skeleton + `lib/session.ts` + first 3 endpoints (`feature/session-progress-api`, merged after live Supabase smoke). |
-| Day 2 | ✅ Zod step schemas (`lib/validation/steps.ts`) + `PATCH /api/v1/sessions/me/steps/:stepKey` with first-incomplete-step + weight-coherence rules + vitest setup with 67 unit tests (`feature/funnel-persistence-api`, awaits Codex re-review of `review-002-api.md` covering the step API). |
-| Day 3 | `lib/health/calculator.ts`, `POST /api/v1/sessions/me/submit`, two-serializer `GET /api/v1/results/me`, `POST /api/v1/pay`. |
+| Day 2 | ✅ Zod step schemas + `PATCH /api/v1/sessions/me/steps/:stepKey` with first-incomplete-step + weight-coherence rules + vitest with 108 unit tests (`feature/funnel-persistence-api`, merged). |
+| Day 3 | ✅ Pure health calculator (`lib/health/calculator.ts`) + `POST /api/v1/sessions/me/submit` + two-serializer `GET /api/v1/results/me` (leak-tested) + mock `POST /api/v1/pay` with `Idempotency-Key` + minimal `/pay` and `/results` browser pages (`feature/assessment-result-api`, awaits Codex re-review of review-006 closeout). |
 | Day 4 | Funnel UI, `/pay` browser page, Vercel + Supabase deploy, full README (env vars, cookie-jar cURL block, Postman collection). |
 | Day 5 | Edge-case hardening, optional `step_event`, schema diagram, AI collaboration log, Codex final review. |
 

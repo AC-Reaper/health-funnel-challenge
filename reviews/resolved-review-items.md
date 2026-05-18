@@ -549,6 +549,101 @@ Verification:
 Codex re-reviewed closeout commit `36f8830` on 2026-05-18. `npm run typecheck`, `npm test` (108 tests), and `npm run build` all pass. B002 is verified fixed by own-property step-key checking plus inherited-key tests. I005 is verified fixed by symmetric `main_goal` coherence checking. I006 is verified fixed by one transaction that upserts assessment and updates `session.current_step`. I007 remains intentionally partial: pure helper regression tests are committed, while route-handler integration tests are deferred and covered by recorded live Supabase smoke for this MVP branch. N004 is verified fixed in docs and tests.
 Status: Re-verified by Codex 2026-05-18. No open Blocking or Important step-API findings remain.
 
+## review-006 B001: /submit and /pay idempotency not committed as regression tests
+
+Source: `reviews/review-006-day3.md`
+
+Resolved in:
+- `lib/result-repo.ts` (`SubmitTxOps` seam + `runSubmitTransaction` pure orchestrator + `buildSubmitOpsFromTx` adapter)
+- `lib/payment.ts` (`PaymentTxOps` seam + `runPaymentTransaction` pure orchestrator + `buildPaymentOpsFromTx` adapter)
+- `tests/lib/result-repo.test.ts` (4 cases: first submit, idempotent replay, P2002 race recovery, session.status flip)
+- `tests/lib/payment.test.ts` (4 new state-machine cases on top of the existing 4 decidePaymentAction cases)
+
+Verification:
+166 → 175 tests; all green via `npm test`. The fakes faithfully model the `Result.sessionId` UNIQUE and `Payment.(sessionId, idempotencyKey)` UNIQUE constraints and throw a shape-compatible `{code:"P2002"}` error so the production recovery paths are exercised. Live cookie-jar smoke against Supabase continues to run on every branch as an additional check.
+Status: Resolved 2026-05-19.
+
+## review-006 I001: /submit re-validates bounds but not weight × goal coherence
+
+Source: `reviews/review-006-day3.md`
+
+Resolved in:
+- `lib/health/coherence.ts` (extracted from `lib/assessment.ts` so the rule is reusable outside server-only contexts)
+- `lib/validation/assessment.ts` (`FULL_ASSESSMENT_SCHEMA.superRefine` adds issues on `mainGoal`/`weightKg`/`targetWeightKg`)
+- `docs/04-api-design.md` §4 (Submit) documents the 422 VALIDATION_ERROR path
+- `tests/lib/validation/assessment.test.ts` (5 new cases covering each goal's coherence boundary)
+
+Verification:
+The same `checkWeightCoherence` helper now backs both the per-step PATCH guard (review-002 I005) and the /submit final check. A row inserted by any non-step path cannot reach `compute()`.
+Status: Resolved 2026-05-19.
+
+## review-006 I002: truncated long curves snapped final point to target
+
+Source: `reviews/review-006-day3.md`
+
+Resolved in:
+- `lib/health/calculator.ts` (`computeCurveAndDate` snaps to `target` only when `!isTruncated`)
+- `tests/lib/health/calculator.test.ts` (boundary case: weightKg=250, targetWeightKg=175 — exactly 30% delta, not short-circuited, truncated at week 52 to 224 kg, `predictedTargetDate=null`)
+
+Verification:
+The contract no longer self-contradicts (date unknown + curve "reaches" goal in one year). Existing realistic-range tests unaffected.
+Status: Resolved 2026-05-19.
+
+## review-006 N001: API doc leak invariant omitted algorithmVersion
+
+Source: `reviews/review-006-day3.md`
+
+Resolved in:
+- `docs/04-api-design.md` §5 — the documented Test invariant now lists `dailyCaloriesKcal`, `predictedTargetDate`, `curvePoints`, `"plan"`, and `algorithmVersion`.
+
+Verification:
+The doc and the existing `tests/lib/serializers/result.test.ts` leak assertion now match.
+Status: Resolved 2026-05-19.
+
+## review-006 N002: README had duplicated Day-3 row
+
+Source: `reviews/review-006-day3.md`
+
+Resolved in:
+- `README.md` — the leftover Day-3 placeholder row is removed; only the completed Day-3 row remains.
+
+Verification:
+`grep "Day 3" README.md` returns exactly one match.
+Status: Resolved 2026-05-19.
+
+## review-006 N003: /pay page does not check session/result readiness
+
+Source: `reviews/review-006-day3.md`
+
+Resolved in (deferred):
+- `memory/task-board.md` (linked to T-401 and T-402 on Day 4)
+
+Verification:
+Codex's own suggested fix targets the Day-4 funnel UI branch (`feature/frontend-funnel`). The `/pay` page is a Day-3 placeholder; the polished UX gate (no-session → `/`, not-submitted → "submit first" copy, submitted+free → pay CTA) lands when the full funnel UI lands. The API is the source of truth, so this is UX polish, not a security gap.
+Status: Deferred to T-401/T-402.
+
+## review-006 re-review: Day-3 fixes verified at 7b17949
+
+Source: `reviews/review-006-day3.md` Re-review section
+
+Resolved in:
+- `lib/result-repo.ts`
+- `lib/payment.ts`
+- `lib/health/coherence.ts`
+- `lib/validation/assessment.ts`
+- `lib/health/calculator.ts`
+- `tests/lib/result-repo.test.ts`
+- `tests/lib/payment.test.ts`
+- `tests/lib/validation/assessment.test.ts`
+- `tests/lib/health/calculator.test.ts`
+- `docs/04-api-design.md`
+- `README.md`
+- Commit `7b17949` closeout records
+
+Verification:
+Codex re-reviewed closeout commit `7b17949` on 2026-05-19. `npm run typecheck`, `npm test` (175 tests), and `npm run build` all pass. B001 is verified fixed by committed submit/payment state-machine tests using transaction seams. I001 is verified fixed by submit-time `FULL_ASSESSMENT_SCHEMA.superRefine()` coherence checks. I002 is verified fixed by the truncated-curve implementation and boundary test. N001/N002 are fixed in docs. N003 is explicitly deferred to Day-4 browser UX.
+Status: Re-verified by Codex 2026-05-19. No open Blocking or Important Day-3 findings remain.
+
 ## review-003 (re-review) N004: ER diagram type labels stale after schema fixes
 
 Source: `reviews/review-003-db.md` re-review

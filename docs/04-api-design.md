@@ -243,6 +243,12 @@ All errors share one envelope, regardless of status code:
   ```
 - **422 INCOMPLETE_ASSESSMENT** if any required field is missing, with
   `fields.missingSteps: ["weight","activity"]`.
+- **422 VALIDATION_ERROR** if the stored assessment is internally
+  incoherent (review-006 I001). `/submit` re-runs the weight × main_goal
+  coherence rule via `FULL_ASSESSMENT_SCHEMA.superRefine()`, so a row
+  inserted through any non-step path (manual DB edit, future
+  regression) cannot reach `compute()`. Field messages land on
+  `mainGoal`, `weightKg`, and `targetWeightKg`.
 
 ---
 
@@ -298,7 +304,7 @@ All errors share one envelope, regardless of status code:
 - **409 NOT_SUBMITTED** if `/submit` has not been called.
 - **Test invariant**: a snapshot test JSON-serialises a teaser response and
   asserts the strings `dailyCaloriesKcal`, `predictedTargetDate`,
-  `curvePoints`, and `"plan"` are **not** present.
+  `curvePoints`, `"plan"`, and `algorithmVersion` are **not** present.
 
 ---
 

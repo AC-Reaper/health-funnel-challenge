@@ -73,60 +73,16 @@ function stepPatchToColumns<K extends StepKey>(
   }
 }
 
-export interface WeightCoherenceError {
-  ok: false;
-  fields: Record<"weightKg" | "targetWeightKg", string>;
-}
+// Re-exported for backward compat — the canonical home is lib/health/coherence.ts
+// so the same rule can be reused from non-server-only contexts (Zod
+// superRefine, future client components).
+import {
+  checkWeightCoherence,
+  type WeightCoherenceError,
+} from "./health/coherence";
 
-/**
- * Pure helper: enforces the weight × main_goal rule from docs/04 §3.
- * Returns null on success, a structured error map on violation.
- * `build_muscle` accepts any direction (spec is silent on it).
- */
-export function checkWeightCoherence(
-  mainGoal: MainGoal,
-  weightKg: number,
-  targetWeightKg: number,
-): WeightCoherenceError | null {
-  const diff = targetWeightKg - weightKg;
-
-  if (mainGoal === "lose_weight" && diff >= 0) {
-    return weightCoherenceError(
-      "targetWeightKg must be less than weightKg for goal 'lose_weight'",
-      weightKg,
-      targetWeightKg,
-    );
-  }
-  if (mainGoal === "gain_weight" && diff <= 0) {
-    return weightCoherenceError(
-      "targetWeightKg must be greater than weightKg for goal 'gain_weight'",
-      weightKg,
-      targetWeightKg,
-    );
-  }
-  if (mainGoal === "maintain" && Math.abs(diff) > 2) {
-    return weightCoherenceError(
-      "targetWeightKg must be within 2kg of weightKg for goal 'maintain'",
-      weightKg,
-      targetWeightKg,
-    );
-  }
-  return null;
-}
-
-function weightCoherenceError(
-  message: string,
-  weightKg: number,
-  targetWeightKg: number,
-): WeightCoherenceError {
-  return {
-    ok: false,
-    fields: {
-      weightKg: `${message} (weightKg=${weightKg}, targetWeightKg=${targetWeightKg})`,
-      targetWeightKg: message,
-    },
-  };
-}
+export { checkWeightCoherence };
+export type { WeightCoherenceError };
 
 export interface MainGoalChangeError {
   ok: false;
