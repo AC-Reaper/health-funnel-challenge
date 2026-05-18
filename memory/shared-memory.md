@@ -69,10 +69,20 @@ payment.
 
 - Architecture spec → `docs/02-architecture.md` v2
 - API contracts → `docs/04-api-design.md` v1
+- DB design → `docs/03-database-design.md` (filled on `feature/db-schema`)
+- Prisma schema → `prisma/schema.prisma`
+- Initial migration → `prisma/migrations/20260518000000_init/migration.sql`
 - ADR log → `memory/decisions.md` (ADR-001…013 Accepted)
 - Open questions → `memory/open-questions.md` (no open blocker)
 - Latest review → `reviews/review-005-governance-scaffold.md`
-  (Open; no Blocking; 5 Important addressed this turn)
+  (Open; no Blocking; 5 Important addressed)
+
+## Current Branch
+
+`feature/db-schema` — shipped Prisma schema + initial migration + env
+scaffolding. Awaiting Codex `reviews/review-003-db.md` (T-106) before
+merging back to `main`. Live `prisma migrate deploy` is blocked on
+Owner provisioning Supabase (T-102).
 
 ## Code Management
 

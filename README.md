@@ -42,7 +42,7 @@ yet.** Day-1 implementation is unblocked: ADR-001…013 are accepted and
 
 | Day | What lands here |
 | - | - |
-| Day 1 | `package.json`, Next.js skeleton, Prisma schema + first migration, signed-cookie session lib, `POST /api/v1/sessions`, `GET /api/v1/sessions/me`, `/api/v1/healthz`. |
+| Day 1 | ✅ `package.json` + Prisma schema + first migration (shipped on `feature/db-schema`). Remaining: Next.js skeleton, signed-cookie session lib, `POST /api/v1/sessions`, `GET /api/v1/sessions/me`, `/api/v1/healthz`. |
 | Day 2 | Zod step schemas, `PATCH /api/v1/sessions/me/steps/:stepKey` with first-incomplete-step rule, boundary tests. |
 | Day 3 | `lib/health/calculator.ts`, `POST /api/v1/sessions/me/submit`, two-serializer `GET /api/v1/results/me`, `POST /api/v1/pay`. |
 | Day 4 | Funnel UI, `/pay` browser page, Vercel + Supabase deploy, full README (env vars, cookie-jar cURL block, Postman collection). |
@@ -67,26 +67,31 @@ Commit messages use Conventional Commits, for example
 `feat: implement anonymous session api` or
 `docs: add api examples and paid session instructions`.
 
-## Setup (placeholder — final version lands Day 4)
+## Setup (current — final demo block lands Day 4)
 
 ```bash
 # 1. Clone
-git clone <repo-url>
-cd health-funnel-challenge
+git clone <repo-url> && cd health-funnel-challenge
 
-# 2. Install (Day 1)
-# npm install
+# 2. Install
+npm install
 
-# 3. Env vars (Day 1)
-# cp .env.example .env
-# fill DATABASE_URL, DIRECT_URL, SESSION_COOKIE_SECRET
+# 3. Env vars
+cp .env.example .env
+# fill DATABASE_URL (Supabase pooled, port 6543) and
+# DIRECT_URL (Supabase direct, port 5432).
+# SESSION_COOKIE_SECRET is not yet read by any code on `main`; set
+# anything (will be enforced from feature/session-progress-api).
 
-# 4. DB (Day 1)
-# npm run db:deploy
+# 4. Generate Prisma client (no DB required)
+npm run db:generate
 
-# 5. Run
-# npm run dev
+# 5. Apply migrations (requires DIRECT_URL pointing at Postgres)
+npm run db:deploy
 ```
+
+`npm run dev` is not wired yet — Next.js scaffold lands on
+`feature/session-progress-api`. Node 20 LTS is pinned via `.nvmrc`.
 
 ## Demo path (placeholder — final cURL cookie-jar block lands Day 4)
 

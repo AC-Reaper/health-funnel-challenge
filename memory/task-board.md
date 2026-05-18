@@ -8,12 +8,10 @@ Owner is who does the work; reviews follow the AGENTS.md §5 flow.
 
 ### Day 1 — Foundations (unblocked; ADR-001…013 Accepted)
 
-- T-101 — Claude — `package.json` + Next.js 14 App Router skeleton
-- T-102 — Owner provisions Supabase; Claude wires Prisma init + env vars
-- T-103 — Claude — `docs/03-database-design.md` filled + first Prisma migration (`session`, `assessment`, `result`, `payment`)
+- T-101 — Claude — Next.js 14 App Router skeleton (deps + `app/` scaffold; the Prisma half of `package.json` shipped on `feature/db-schema`)
+- T-102 — Owner provisions Supabase project and shares `DATABASE_URL` + `DIRECT_URL`; Claude already wired `.env.example`, `package.json`, `prisma/`
 - T-104 — Claude — `lib/session.ts`: signed-cookie create / read / verify
 - T-105 — Claude — Endpoints `POST /api/v1/sessions`, `GET /api/v1/sessions/me`, `GET /api/v1/healthz`
-- T-106 — Claude requests `reviews/review-003-db.md`; Codex writes it
 
 ### Day 2 — Funnel persistence
 
@@ -50,7 +48,8 @@ Owner is who does the work; reviews follow the AGENTS.md §5 flow.
 
 ## Review
 
-- (empty)
+- T-103 — Claude — `feature/db-schema` branch shipped: Prisma schema, initial migration, env scaffolding, `docs/03-database-design.md` filled. Awaiting Codex `reviews/review-003-db.md` (T-106).
+- T-106 — Codex — Write `reviews/review-003-db.md` against the branch.
 
 ## Done
 
@@ -66,3 +65,5 @@ Owner is who does the work; reviews follow the AGENTS.md §5 flow.
 - 2026-05-18 — Codex — `reviews/review-005-governance-scaffold.md` (0 Blocking, 5 Important, 2 Nice-to-have)
 - 2026-05-18 — Claude — review-005 fixes + memory-file format pass (I001–I005, N001–N002)
 - 2026-05-18 — Codex — Owner decisions recorded: Q-002 English copy, Q-003 Mifflin-St Jeor formula, Q-006 silent no-op payment replay, ADR-011…013 accepted
+- 2026-05-18 — Claude — `git init -b main` + baseline commit (`chore: initialise scaffold and design docs`); `feature/db-schema` branch created per ADR-011
+- 2026-05-18 — Claude — `feature/db-schema`: shipped `package.json` + `tsconfig.json` + `.nvmrc` + `.gitignore` + `.env.example` + `.env` + `prisma/schema.prisma` + initial migration (`prisma/migrations/20260518000000_init/migration.sql`) + `migration_lock.toml`. `npm install`, `prisma format`, `prisma validate`, `prisma generate` all pass locally. `docs/03-database-design.md` filled (ER diagram + per-table columns + enum list + index rationale + migration runbook). `README.md` setup section refreshed.
