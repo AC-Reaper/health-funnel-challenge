@@ -76,20 +76,20 @@ payment.
 - Pure helpers → `lib/progress.ts`, `lib/assessment.ts`
 - Step validation → `lib/validation/steps.ts`
 - Route handlers → `app/api/v1/{healthz,sessions,sessions/me,sessions/me/steps/[stepKey]}/route.ts`
-- Test suite → `tests/**` (vitest, 67 tests)
+- Test suite → `tests/**` (vitest, 108 tests)
 - ADR log → `memory/decisions.md` (ADR-001…013 Accepted)
 - Open questions → `memory/open-questions.md` (no open blocker)
-- Latest reviews → `reviews/review-003-db.md` (Resolved on `main`); `reviews/review-002-api.md` pending against `feature/session-progress-api`.
+- Latest reviews → `reviews/review-003-db.md` (Resolved on `main`); `reviews/review-002-api.md` Resolved through the `feature/funnel-persistence-api` step API surface.
 
 ## Current Branch
 
 `feature/funnel-persistence-api` — Zod step schemas, the
 `PATCH /api/v1/sessions/me/steps/:stepKey` handler (first-incomplete-step
-+ weight×main_goal coherence), and vitest with 67 unit tests.
++ symmetric weight×main_goal coherence), and vitest with 108 unit tests.
 `feature/db-schema` and `feature/session-progress-api` are merged
 into `main`. T-102 (Supabase) is done; live DB smoke for the step
-endpoint passed. Branch awaits Codex re-review of
-`reviews/review-002-api.md` covering the step API before merge.
+endpoint passed. Codex re-reviewed closeout commit `36f8830`; no open
+Blocking/Important step-API findings remain, so the branch is mergeable.
 
 ## Code Management
 

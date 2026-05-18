@@ -2,7 +2,7 @@
 
 ## Status
 
-Resolved for T-101/T-104/T-105 — 2026-05-18
+Resolved through T-201/T-202/T-203 step API — 2026-05-18
 
 Branch reviewed: `feature/session-progress-api`
 
@@ -265,3 +265,46 @@ References:
 References:
 - `lib/assessment.ts:71-80`
 - `docs/04-api-design.md:169-202`
+
+## Step API Re-review — 2026-05-18
+
+Commit reviewed: `36f8830`
+
+Scope re-reviewed:
+- Closeout records in `memory/task-board.md`, `memory/claude-notes.md`, and `reviews/resolved-review-items.md`
+- Fix commits immediately before `36f8830`: `f233114`, `6b428df`, `8a1971c`, `c581272`, `ac99c89`
+- Current `lib/validation/steps.ts`
+- Current `lib/assessment.ts`
+- Current `app/api/v1/sessions/me/steps/[stepKey]/route.ts`
+- Current `tests/lib/validation/steps.test.ts` and `tests/lib/assessment.test.ts`
+- Current `docs/04-api-design.md` §3
+
+Verification run:
+- `npm run typecheck` — pass
+- `npm test` — pass, 108 tests
+- `npm run build` — pass
+
+### Blocking
+
+None.
+
+B002 is resolved. `isStepKey` now uses `Object.hasOwn(STEP_SCHEMAS, value)`, so inherited `Object.prototype` names cannot pass the path-param guard. The committed tests cover `toString`, `constructor`, `__proto__`, `hasOwnProperty`, `valueOf`, `isPrototypeOf`, and `propertyIsEnumerable`. The route still maps unknown step keys to `400 BAD_REQUEST` before schema lookup.
+
+### Important
+
+No open Important findings remain for the step persistence surface.
+
+I005 is resolved. The route now checks `main_goal` edits against an already-saved weight pair through `checkMainGoalChange`, returning `422 VALIDATION_ERROR` with actionable `mainGoal` and `targetWeightKg` fields rather than leaving an incoherent assessment.
+
+I006 is resolved. The assessment upsert and `session.current_step` update now run inside one `db.$transaction`; `computeCurrentStep(updatedAssessment)` feeds the cached session column, and Prisma `@updatedAt` refreshes `session.updated_at`.
+
+I007 is accepted as resolved-partial for this 5-day challenge. The missing behavior has been moved into pure, committed helper tests where practical: `projectAssessment`, `stepIsFilled`, `firstMissingPrereq`, `checkWeightCoherence`, and `checkMainGoalChange` are now covered. Full route-handler integration tests remain deferred because they need a Prisma mock layer or test database harness; the branch has live Supabase smoke recorded for the two route-only edges. This is acceptable for the current MVP branch, but Day-3 submit/result/pay review should still add focused leak/idempotency tests where those surfaces are riskier.
+
+### Nice-to-have
+
+None.
+
+N004 is resolved. `docs/04-api-design.md` now explicitly says `build_muscle` accepts any target-weight direction in the MVP, and `tests/lib/assessment.test.ts` locks that behavior for both direct weight validation and `main_goal` changes.
+
+Merge recommendation:
+`feature/funnel-persistence-api` is clear to merge from the step-API review perspective. Future review still needs to cover Day-3 `/submit`, `/results/me`, and `/pay` because those endpoints are outside this branch.

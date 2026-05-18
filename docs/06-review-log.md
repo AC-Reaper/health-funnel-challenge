@@ -19,7 +19,7 @@
 | - | - | - | - |
 | review-000-baseline-readiness | Baseline readiness | Closed-informed | Findings informed the v1/v2 design and scaffold rewrite. |
 | review-001-architecture | Architecture | Resolved-in-design | Codex re-reviewed v2; Blocking architecture findings are resolved in design. Implementation verification remains pending. |
-| review-002-api | API | Open | Step API review for `feature/funnel-persistence-api` on 2026-05-18. 1 Blocking, 3 Important, 1 Nice-to-have. |
+| review-002-api | API | Resolved | Re-reviewed `feature/funnel-persistence-api` at `36f8830`: step API has no open Blocking/Important findings; I007 route tests accepted as partial with pure tests + live smoke. Day-3 submit/result/pay API still pending future review. |
 | review-003-db | Database | Resolved | Re-reviewed `feature/db-schema` on 2026-05-18. Original 1 Blocking + 4 Important are resolved; 1 docs-only Nice-to-have remains. |
 | review-004-final | Final | Pending | Triggers Day 5 after T-501. |
 | review-005-governance-scaffold | Governance scaffold | Resolved-in-design | No Blocking findings. Claude addressed I001/I002/I003/I005/N001/N002; Codex recorded Owner decisions for Q-002/Q-003/Q-006 and resolved I004 in design. |

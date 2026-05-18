@@ -532,6 +532,23 @@ Verification:
 The product decision is now visible to reviewers in the API doc; the test block locks it in.
 Status: Resolved 2026-05-18.
 
+## review-002 step-API re-review: fixes verified at 36f8830
+
+Source: `reviews/review-002-api.md` Step API Re-review section
+
+Resolved in:
+- `lib/validation/steps.ts`
+- `lib/assessment.ts`
+- `app/api/v1/sessions/me/steps/[stepKey]/route.ts`
+- `tests/lib/validation/steps.test.ts`
+- `tests/lib/assessment.test.ts`
+- `docs/04-api-design.md`
+- Commit `36f8830` closeout records
+
+Verification:
+Codex re-reviewed closeout commit `36f8830` on 2026-05-18. `npm run typecheck`, `npm test` (108 tests), and `npm run build` all pass. B002 is verified fixed by own-property step-key checking plus inherited-key tests. I005 is verified fixed by symmetric `main_goal` coherence checking. I006 is verified fixed by one transaction that upserts assessment and updates `session.current_step`. I007 remains intentionally partial: pure helper regression tests are committed, while route-handler integration tests are deferred and covered by recorded live Supabase smoke for this MVP branch. N004 is verified fixed in docs and tests.
+Status: Re-verified by Codex 2026-05-18. No open Blocking or Important step-API findings remain.
+
 ## review-003 (re-review) N004: ER diagram type labels stale after schema fixes
 
 Source: `reviews/review-003-db.md` re-review
