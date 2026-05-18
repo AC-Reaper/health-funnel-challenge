@@ -1,0 +1,59 @@
+import { NextResponse } from "next/server";
+import { cookies } from "next/headers";
+
+import { internalError } from "@/lib/api/errors";
+import { getRequestId } from "@/lib/api/request-id";
+import {
+  COOKIE_NAME,
+  buildSetCookieHeader,
+  createSession,
+  findAssessmentBySessionId,
+  findSessionById,
+  serializeSession,
+  verifyCookie,
+} from "@/lib/session";
+
+export const dynamic = "force-dynamic";
+
+export async function POST(req: Request) {
+  const requestId = getRequestId(req);
+
+  try {
+    const raw = cookies().get(COOKIE_NAME)?.value;
+    const existingSid = verifyCookie(raw);
+
+    if (existingSid) {
+      const session = await findSessionById(existingSid);
+      if (session) {
+        const assessment = await findAssessmentBySessionId(session.id);
+        return NextResponse.json(serializeSession(session, assessment), {
+          headers: {
+            "x-request-id": requestId,
+            "set-cookie": buildSetCookieHeader(session.id),
+          },
+        });
+      }
+    }
+
+    const session = await createSession({
+      userAgent: req.headers.get("user-agent") ?? undefined,
+    });
+
+    return NextResponse.json(serializeSession(session, null), {
+      headers: {
+        "x-request-id": requestId,
+        "set-cookie": buildSetCookieHeader(session.id),
+      },
+    });
+  } catch (err) {
+    console.error(
+      JSON.stringify({
+        level: "error",
+        msg: "POST /api/v1/sessions failed",
+        requestId,
+        err: err instanceof Error ? err.message : String(err),
+      }),
+    );
+    return internalError(requestId);
+  }
+}
