@@ -422,11 +422,16 @@ Status: Resolved 2026-05-18.
 Source: `reviews/review-002-api.md`
 
 Resolved in:
-- `memory/task-board.md` (T-203 already covers the requested boundary tests; this finding is the deferral path Codex itself proposed)
+- `vitest.config.ts` + `tests/setup.ts` + `tests/_shims/server-only.ts` (Vitest 4 setup)
+- `tests/lib/session.test.ts` (8 tests: round-trip, tampered sig, wrong-length sig, sig-valid-for-different-sid, malformed base64url, base64-of-non-JSON, missing fields, undefined/empty)
+- `tests/lib/progress.test.ts` (8 tests: null assessment, empty row, single-field-gap progression, weight requires both fields, fully populated)
+- `tests/lib/validation/steps.test.ts` (covers boundary + enum + integer + `.strict()` for all 6 step schemas)
+- `tests/lib/api/parse-body.test.ts` (6 tests: missing/wrong content-type, malformed JSON, schema failure with fields, unknown keys, success)
+- `package.json` `test` script
 
 Verification:
-Acknowledged as deferred until T-203 lands the Vitest setup on Day 2. No code change on this branch.
-Status: Deferred to T-203 (per Codex's suggested fallback).
+67 tests across 4 files, all green via `npm test`. Shipped on `feature/funnel-persistence-api` alongside T-201/T-202.
+Status: Resolved 2026-05-18 by T-203.
 
 ## review-002 re-review: local API fixes verified
 
@@ -460,6 +465,89 @@ Resolved in:
 Verification:
 Codex reviewed `db992ab` on 2026-05-18. The recorded live smoke is sufficient for review-002 I004: migration deployed to Supabase; introspection confirmed app tables, native enums, partial unique index, and FK actions; `POST /sessions` create inserted a real row and issued a cookie; `POST /sessions` reuse returned the same `sessionId`; `GET /sessions/me` with the valid cookie returned the canonical fresh-session DTO; deleting the session row and reusing the still-valid signed cookie returned `401 NO_SESSION`.
 Status: Re-verified by Codex 2026-05-18. No Blocking or Important findings remain for T-101/T-104/T-105.
+
+## review-002 (step-API) B002: isStepKey accepted inherited Object.prototype keys
+
+Source: `reviews/review-002-api.md` Step API Review section
+
+Resolved in:
+- `lib/validation/steps.ts` (`Object.hasOwn(STEP_SCHEMAS, value)`)
+- `tests/lib/validation/steps.test.ts` (7 new inherited-key cases)
+
+Verification:
+Live Supabase smoke confirms `PATCH /api/v1/sessions/me/steps/toString` and `/__proto__` return 400 `BAD_REQUEST` (previously 500). Unit tests cover toString, constructor, __proto__, hasOwnProperty, valueOf, isPrototypeOf, propertyIsEnumerable.
+Status: Resolved 2026-05-18.
+
+## review-002 (step-API) I005: main_goal change could invalidate saved weight pair
+
+Source: `reviews/review-002-api.md` Step API Review section
+
+Resolved in:
+- `lib/assessment.ts` (`checkMainGoalChange` pure helper)
+- `app/api/v1/sessions/me/steps/[stepKey]/route.ts` (new `stepKey === "main_goal"` branch)
+- `docs/04-api-design.md` §3 (symmetric rule documented)
+- `tests/lib/assessment.test.ts` (7 cases)
+
+Verification:
+Live smoke: after saving `lose_weight + (80, 70)`, `PATCH main_goal` to `gain_weight` or `maintain` returns 422 `VALIDATION_ERROR` with `fields.mainGoal` describing the conflict and `fields.targetWeightKg` pointing at `PATCH /api/v1/sessions/me/steps/weight`. `build_muscle` flip accepted (N004 default).
+Status: Resolved 2026-05-18.
+
+## review-002 (step-API) I006: session.current_step and session.updated_at stayed stale
+
+Source: `reviews/review-002-api.md` Step API Review section
+
+Resolved in:
+- `lib/assessment.ts` (`upsertAssessmentField` accepts a Prisma transaction client)
+- `app/api/v1/sessions/me/steps/[stepKey]/route.ts` (`db.$transaction` wrap)
+
+Verification:
+Live `psql`-equivalent snapshot via Prisma after the funnel walkthrough shows `session.current_step = "activity"` (was permanently null) and `session.updated_at - session.created_at ≈ 55 seconds` (matching the time spent PATCH-ing). The assessment upsert and the session update commit together; failure of either rolls both back.
+Status: Resolved 2026-05-18.
+
+## review-002 (step-API) I007: T-203 lacked route-level state-machine tests
+
+Source: `reviews/review-002-api.md` Step API Review section
+
+Resolved in (partial):
+- `lib/assessment.ts` (extracted pure helpers: `projectAssessment`, `stepIsFilled`, `firstMissingPrereq`)
+- `tests/lib/assessment.test.ts` (41 new tests covering each helper + the full `checkWeightCoherence` matrix + `checkMainGoalChange`)
+- `tests/lib/validation/steps.test.ts` (inherited-key cases for `isStepKey`)
+
+Deferred:
+Route-handler integration tests for "inherited unknown step key → 400" and "submitted session → 409 ALREADY_SUBMITTED" require either a Prisma mocking layer or a test-only Postgres runtime, both outside the MVP budget. Live cookie-jar smoke against Supabase remains the regression gate for those two cases and is documented per branch in `memory/claude-notes.md`. A future polish branch can add `next start` + in-process Supertest if Day-5 slack allows.
+
+Verification:
+108 tests across 5 files, all green. Three of the five Codex-listed scenarios are committed as pure-unit tests; the other two are exercised by live cURL smoke in every branch.
+Status: Resolved (partial) 2026-05-18.
+
+## review-002 (step-API) N004: build_muscle weight semantics were implicit
+
+Source: `reviews/review-002-api.md` Step API Review section
+
+Resolved in:
+- `docs/04-api-design.md` §3 (closing note pins "any direction" with rationale)
+- `tests/lib/assessment.test.ts` (dedicated "build_muscle (N004: accepts any direction)" describe block with all three directions, plus parallel cases in `checkMainGoalChange`)
+
+Verification:
+The product decision is now visible to reviewers in the API doc; the test block locks it in.
+Status: Resolved 2026-05-18.
+
+## review-002 step-API re-review: fixes verified at 36f8830
+
+Source: `reviews/review-002-api.md` Step API Re-review section
+
+Resolved in:
+- `lib/validation/steps.ts`
+- `lib/assessment.ts`
+- `app/api/v1/sessions/me/steps/[stepKey]/route.ts`
+- `tests/lib/validation/steps.test.ts`
+- `tests/lib/assessment.test.ts`
+- `docs/04-api-design.md`
+- Commit `36f8830` closeout records
+
+Verification:
+Codex re-reviewed closeout commit `36f8830` on 2026-05-18. `npm run typecheck`, `npm test` (108 tests), and `npm run build` all pass. B002 is verified fixed by own-property step-key checking plus inherited-key tests. I005 is verified fixed by symmetric `main_goal` coherence checking. I006 is verified fixed by one transaction that upserts assessment and updates `session.current_step`. I007 remains intentionally partial: pure helper regression tests are committed, while route-handler integration tests are deferred and covered by recorded live Supabase smoke for this MVP branch. N004 is verified fixed in docs and tests.
+Status: Re-verified by Codex 2026-05-18. No open Blocking or Important step-API findings remain.
 
 ## review-003 (re-review) N004: ER diagram type labels stale after schema fixes
 

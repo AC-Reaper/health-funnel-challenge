@@ -73,18 +73,23 @@ payment.
 - Prisma schema → `prisma/schema.prisma`
 - Initial migration → `prisma/migrations/20260518000000_init/migration.sql`
 - Session library → `lib/session.ts`
-- Route handlers → `app/api/v1/{healthz,sessions,sessions/me}/route.ts`
+- Pure helpers → `lib/progress.ts`, `lib/assessment.ts`
+- Step validation → `lib/validation/steps.ts`
+- Route handlers → `app/api/v1/{healthz,sessions,sessions/me,sessions/me/steps/[stepKey]}/route.ts`
+- Test suite → `tests/**` (vitest, 108 tests)
 - ADR log → `memory/decisions.md` (ADR-001…013 Accepted)
 - Open questions → `memory/open-questions.md` (no open blocker)
-- Latest reviews → `reviews/review-003-db.md` (Resolved on `main`); `reviews/review-002-api.md` pending against `feature/session-progress-api`.
+- Latest reviews → `reviews/review-003-db.md` (Resolved on `main`); `reviews/review-002-api.md` Resolved through the `feature/funnel-persistence-api` step API surface.
 
 ## Current Branch
 
-`feature/session-progress-api` — Next.js 14 App Router skeleton +
-`lib/session.ts` + `POST /api/v1/sessions` + `GET /api/v1/sessions/me`
-+ `GET /api/v1/healthz`. `feature/db-schema` is merged to `main`.
-DB-touching endpoint verification is blocked on T-102 (Supabase). The
-branch awaits Codex `reviews/review-002-api.md` (T-204) before merge.
+`feature/funnel-persistence-api` — Zod step schemas, the
+`PATCH /api/v1/sessions/me/steps/:stepKey` handler (first-incomplete-step
++ symmetric weight×main_goal coherence), and vitest with 108 unit tests.
+`feature/db-schema` and `feature/session-progress-api` are merged
+into `main`. T-102 (Supabase) is done; live DB smoke for the step
+endpoint passed. Codex re-reviewed closeout commit `36f8830`; no open
+Blocking/Important step-API findings remain, so the branch is mergeable.
 
 ## Code Management
 

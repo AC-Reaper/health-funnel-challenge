@@ -168,17 +168,31 @@ All errors share one envelope, regardless of status code:
     `409 STEP_OUT_OF_ORDER` and include `firstMissingStep` in `fields`.
   - Editing a step that has already been saved is allowed (idempotent
     upsert).
-  - Cross-field check for `weight`: if `mainGoal` is `lose_weight` then
-    `targetWeightKg < weightKg`; if `gain_weight` then `>`; if `maintain`
-    then `==` within ±2kg. Violations → `VALIDATION_ERROR` with both fields.
-- **200 OK**
+  - Cross-field check (weight × main_goal): if `mainGoal` is
+    `lose_weight` then `targetWeightKg < weightKg`; if `gain_weight`
+    then `>`; if `maintain` then within ±2kg. Violations →
+    `VALIDATION_ERROR` with both `weightKg` and `targetWeightKg` fields.
+    The same rule is enforced **symmetrically** when PATCH-ing
+    `main_goal` against an already-saved weight pair — in that case
+    the violation surfaces on `mainGoal` and `targetWeightKg`
+    (review-002 I005). `build_muscle` is intentionally unconstrained
+    (review-002 N004); see §3 closing note.
+- **200 OK** — Canonical session DTO (same shape as §1 and §2):
   ```json
   {
     "sessionId": "1a2b…",
-    "currentStep": "height",
+    "status": "draft",
+    "currentStep": "age",
+    "entitlementStatus": "free",
+    "submitted": false,
+    "createdAt": "2026-05-18T09:30:00.000Z",
     "answers": { "gender": "female", "mainGoal": "lose_weight" }
   }
   ```
+- **400 BAD_REQUEST** if `:stepKey` is not one of the six known step
+  keys, or if the request is wrong-`Content-Type` / malformed JSON.
+- **409 ALREADY_SUBMITTED** if the session has already been submitted;
+  answers are immutable after `/submit`.
 - **409 STEP_OUT_OF_ORDER**
   ```json
   {
@@ -189,7 +203,18 @@ All errors share one envelope, regardless of status code:
     }
   }
   ```
-- **422 VALIDATION_ERROR** for bad values.
+- **422 VALIDATION_ERROR** for bad values, including the
+  weight × main_goal coherence violation, which returns messages on
+  both `weightKg` and `targetWeightKg`.
+
+> **Note (build_muscle semantics, review-002 N004).** The cross-field
+> rule does **not** constrain `build_muscle` in either direction.
+> This is intentional — recomposition users may keep
+> `targetWeightKg ≈ weightKg` (losing fat while gaining muscle), gain
+> mass (`targetWeightKg > weightKg`), or even cut to a leaner physique
+> (`targetWeightKg < weightKg`). If a future product decision tightens
+> this, the change goes through an ADR and a new test in
+> `tests/lib/assessment.test.ts`.
 
 ---
 

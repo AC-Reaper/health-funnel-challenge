@@ -2,7 +2,7 @@
 
 ## Status
 
-Resolved for T-101/T-104/T-105 — 2026-05-18
+Resolved through T-201/T-202/T-203 step API — 2026-05-18
 
 Branch reviewed: `feature/session-progress-api`
 
@@ -189,3 +189,122 @@ Production cookie flags, especially `Secure`, still need to be observed in the d
 
 Merge recommendation:
 No Blocking or Important findings remain for T-101/T-104/T-105. This branch is clear to merge after Claude records the final task-board status. A full API review is still needed after T-202 lands the step persistence endpoints.
+
+## Step API Review — 2026-05-18
+
+Branch reviewed: `feature/funnel-persistence-api` at `f1ae3b3`
+
+Scope reviewed:
+- `lib/validation/steps.ts`
+- `lib/assessment.ts`
+- `app/api/v1/sessions/me/steps/[stepKey]/route.ts`
+- Vitest setup and tests under `tests/**`
+- `docs/04-api-design.md`
+- README and memory updates related to T-201/T-202/T-203
+
+Verification run:
+- `npm run typecheck` — pass
+- `npm test` — pass, 67 tests
+- `npm run build` — pass
+
+### Blocking
+
+#### B002 — Inherited object keys can bypass `isStepKey` and turn an unknown step into a 500
+
+- Impact range: `PATCH /api/v1/sessions/me/steps/:stepKey`, `lib/validation/steps.ts`, API error-contract tests.
+- Risk reason: `isStepKey` uses `value in STEP_SCHEMAS`. The `in` operator also accepts inherited object keys such as `toString` and `constructor`. A request to `/api/v1/sessions/me/steps/toString` can therefore pass the step-key guard, then `STEP_SCHEMAS[stepKey]` is not a Zod schema and the route can throw a 500 instead of the documented `400 BAD_REQUEST`. This violates the API contract and is exactly the kind of hostile/edge input a reviewer may try.
+- Suggested fix: Replace the guard with an own-property check, e.g. `Object.prototype.hasOwnProperty.call(STEP_SCHEMAS, value)` or `Object.hasOwn(STEP_SCHEMAS, value)`. Add tests for inherited keys (`toString`, `constructor`, `__proto__`) and, ideally, a route-level smoke/assertion that those paths return `400 BAD_REQUEST`.
+
+References:
+- `lib/validation/steps.ts:93-95`
+- `app/api/v1/sessions/me/steps/[stepKey]/route.ts:53-67`
+
+### Important
+
+#### I005 — Changing `main_goal` after saving `weight` can bypass the weight-coherence rule
+
+- Impact range: PATCH step handler, `assessment.main_goal`, `assessment.weight_kg`, future `/submit`, resume/progress consistency.
+- Risk reason: The route only runs `checkWeightCoherence` when `stepKey === "weight"`. A user can save `main_goal = lose_weight`, save `weightKg=80,targetWeightKg=70`, then edit `main_goal = gain_weight`. The existing weight answers now contradict the new goal, but the route accepts the edit and the session still appears complete. Future `/submit` may reject it, but `GET /sessions/me` will resume the user at `activity`, not at the now-invalid `weight` step.
+- Suggested fix: Re-run weight coherence whenever either `weight` or `main_goal` changes and both fields are present. If the new main goal invalidates the existing weight pair, either reject the main-goal edit with `422 VALIDATION_ERROR` pointing at `mainGoal`/`targetWeightKg`, or clear the weight fields and return `currentStep: "weight"`. For a 5-day MVP, rejecting the edit is simpler and preserves stored answers.
+
+References:
+- `app/api/v1/sessions/me/steps/[stepKey]/route.ts:84-100`
+- `lib/assessment.ts:71-105`
+- `docs/04-api-design.md:169-202`
+
+#### I006 — `session.current_step` and `session.updated_at` remain stale after step saves
+
+- Impact range: `PATCH /api/v1/sessions/me/steps/:stepKey`, `session.current_step`, `session.updated_at`, progress recovery diagnostics and any future metrics/janitor queries.
+- Risk reason: The API response recomputes `currentStep` from `assessment`, so the user-facing resume path works. But the database `session.current_step` cache is never updated, and `session.updated_at` does not change because the PATCH only upserts `assessment`. This leaves a modeled progress field permanently stale/null and weakens the database story that the challenge explicitly grades. It also makes the `session(updated_at)` index less meaningful for active-session diagnostics.
+- Suggested fix: After a successful assessment upsert, update the session row in the same transaction with `current_step = computeCurrentStep(freshAssessment)` and let Prisma refresh `updatedAt`. If you want `current_step` to remain purely derived, remove or explicitly deprecate the column in a later migration/docs update; keeping a stale cache is the worst middle ground.
+
+References:
+- `app/api/v1/sessions/me/steps/[stepKey]/route.ts:102-118`
+- `prisma/schema.prisma:100-109`
+- `docs/03-database-design.md:96-104`
+
+#### I007 — T-203 lacks committed route-level tests for the PATCH state machine
+
+- Impact range: T-203 acceptance, regression safety for first-incomplete-step and path-param validation.
+- Risk reason: The new Vitest suite covers schemas, cookie helpers, progress helpers, and body parsing, but it does not exercise the PATCH route or repository state transitions. The task board says out-of-order rejection and boundary paths are verified through live smoke, which is useful but not a committed regression test. The current `isStepKey` bug also slipped through because tests only checked normal unknown strings, not inherited object keys.
+- Suggested fix: Add a small route-level test harness or repository-level tests that cover: inherited unknown step key → 400, `activity` before `age` → 409, editing an earlier saved step remains allowed, changing `main_goal` after weight cannot leave an incoherent assessment, and submitted sessions reject PATCH with `409 ALREADY_SUBMITTED`.
+
+References:
+- `tests/lib/validation/steps.test.ts`
+- `tests/lib/progress.test.ts`
+- `app/api/v1/sessions/me/steps/[stepKey]/route.ts:31-130`
+
+### Nice-to-have
+
+#### N004 — `build_muscle` weight semantics are implicit
+
+- Impact range: `lib/assessment.ts`, docs/API copy, future calculator and UI copy.
+- Risk reason: `build_muscle` currently accepts any target-weight direction because the API doc is silent. That may be acceptable, but it is a product decision: the calculator and UI may later imply a surplus/gain-style plan. Leaving this implicit invites inconsistent copy or tests in Day 3/4.
+- Suggested fix: Add one sentence to `docs/04-api-design.md` and/or `memory/decisions.md`: either "`build_muscle` accepts any target direction in MVP" or "treat `build_muscle` like gain_weight for target coherence." Then add one focused test for the chosen behavior.
+
+References:
+- `lib/assessment.ts:71-80`
+- `docs/04-api-design.md:169-202`
+
+## Step API Re-review — 2026-05-18
+
+Commit reviewed: `36f8830`
+
+Scope re-reviewed:
+- Closeout records in `memory/task-board.md`, `memory/claude-notes.md`, and `reviews/resolved-review-items.md`
+- Fix commits immediately before `36f8830`: `f233114`, `6b428df`, `8a1971c`, `c581272`, `ac99c89`
+- Current `lib/validation/steps.ts`
+- Current `lib/assessment.ts`
+- Current `app/api/v1/sessions/me/steps/[stepKey]/route.ts`
+- Current `tests/lib/validation/steps.test.ts` and `tests/lib/assessment.test.ts`
+- Current `docs/04-api-design.md` §3
+
+Verification run:
+- `npm run typecheck` — pass
+- `npm test` — pass, 108 tests
+- `npm run build` — pass
+
+### Blocking
+
+None.
+
+B002 is resolved. `isStepKey` now uses `Object.hasOwn(STEP_SCHEMAS, value)`, so inherited `Object.prototype` names cannot pass the path-param guard. The committed tests cover `toString`, `constructor`, `__proto__`, `hasOwnProperty`, `valueOf`, `isPrototypeOf`, and `propertyIsEnumerable`. The route still maps unknown step keys to `400 BAD_REQUEST` before schema lookup.
+
+### Important
+
+No open Important findings remain for the step persistence surface.
+
+I005 is resolved. The route now checks `main_goal` edits against an already-saved weight pair through `checkMainGoalChange`, returning `422 VALIDATION_ERROR` with actionable `mainGoal` and `targetWeightKg` fields rather than leaving an incoherent assessment.
+
+I006 is resolved. The assessment upsert and `session.current_step` update now run inside one `db.$transaction`; `computeCurrentStep(updatedAssessment)` feeds the cached session column, and Prisma `@updatedAt` refreshes `session.updated_at`.
+
+I007 is accepted as resolved-partial for this 5-day challenge. The missing behavior has been moved into pure, committed helper tests where practical: `projectAssessment`, `stepIsFilled`, `firstMissingPrereq`, `checkWeightCoherence`, and `checkMainGoalChange` are now covered. Full route-handler integration tests remain deferred because they need a Prisma mock layer or test database harness; the branch has live Supabase smoke recorded for the two route-only edges. This is acceptable for the current MVP branch, but Day-3 submit/result/pay review should still add focused leak/idempotency tests where those surfaces are riskier.
+
+### Nice-to-have
+
+None.
+
+N004 is resolved. `docs/04-api-design.md` now explicitly says `build_muscle` accepts any target-weight direction in the MVP, and `tests/lib/assessment.test.ts` locks that behavior for both direct weight validation and `main_goal` changes.
+
+Merge recommendation:
+`feature/funnel-persistence-api` is clear to merge from the step-API review perspective. Future review still needs to cover Day-3 `/submit`, `/results/me`, and `/pay` because those endpoints are outside this branch.
