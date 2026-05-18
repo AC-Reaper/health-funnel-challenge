@@ -385,9 +385,14 @@ Source: `reviews/review-002-api.md`
 Resolved in:
 - `memory/task-board.md` (Review-column entry now reads "code shipped, awaits DB smoke + Codex re-review"; explicit list of what to verify against a migrated DB)
 - `README.md` (Day-1 row now 🟡 for `feature/session-progress-api`, not ✅)
+- Live DB smoke test against Supabase (2026-05-18, after T-102 closed)
 
 Verification:
-T-105 stays in the Review column (not Done). Live DB smoke is queued for the moment T-102 (Supabase) closes.
+All four paths exercised end-to-end against a migrated Supabase Postgres:
+1. `POST /api/v1/sessions` first call → 200 + Set-Cookie + real session row inserted (`session.create` with `@updatedAt`).
+2. `POST /api/v1/sessions` second call with the issued cookie → 200, same `sessionId`, cookie re-issued (Max-Age refresh).
+3. `GET /api/v1/sessions/me` with the valid cookie → 200 with the canonical DTO (assessment is null → `currentStep:"gender"`, `answers:{}`).
+4. After `prisma.session.delete({ where: { id } })`, `GET /api/v1/sessions/me` with the same (still cryptographically valid) cookie → 401 `NO_SESSION` envelope. This is the deleted-session branch Codex specifically flagged.
 Status: Resolved 2026-05-18.
 
 ## review-002 N001: response shape ahead of API doc
@@ -422,6 +427,26 @@ Resolved in:
 Verification:
 Acknowledged as deferred until T-203 lands the Vitest setup on Day 2. No code change on this branch.
 Status: Deferred to T-203 (per Codex's suggested fallback).
+
+## review-002 re-review: local API fixes verified
+
+Source: `reviews/review-002-api.md`
+
+Resolved in:
+- `lib/api/parse-body.ts`
+- `app/api/v1/sessions/route.ts`
+- `lib/session.ts`
+- `lib/db.ts`
+- `lib/env.ts`
+- `lib/progress.ts`
+- `lib/api/errors.ts`
+- `docs/04-api-design.md`
+- `README.md`
+- `memory/task-board.md`
+
+Verification:
+Codex re-reviewed `feature/session-progress-api` at `11098e3` on 2026-05-18. `npm run typecheck` and `npm run build` pass. Local cURL smoke verifies `/healthz` 200, `/sessions/me` 401 for missing/tampered cookies, and `POST /sessions` body-boundary handling: missing JSON content type → 400, malformed JSON → 400, unknown field → 422. Valid `{}` reaches Prisma and returns 500 only because `.env` still points at the placeholder DB; full session happy-path verification remains pending on T-102.
+Status: Re-verified locally by Codex 2026-05-18; live DB smoke pending T-102.
 
 ## review-003 (re-review) N004: ER diagram type labels stale after schema fixes
 

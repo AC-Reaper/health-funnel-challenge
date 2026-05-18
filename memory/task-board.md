@@ -8,7 +8,6 @@ Owner is who does the work; reviews follow the AGENTS.md §5 flow.
 
 ### Day 1 — Foundations (unblocked; ADR-001…013 Accepted)
 
-- T-102 — Owner provisions Supabase project and shares `DATABASE_URL` + `DIRECT_URL`; Claude already wired `.env.example`, `package.json`, `prisma/`
 
 ### Day 2 — Funnel persistence
 
@@ -45,7 +44,7 @@ Owner is who does the work; reviews follow the AGENTS.md §5 flow.
 
 ## Review
 
-- T-101 / T-104 / T-105 — Claude — `feature/session-progress-api`: code shipped (Next.js 14 skeleton, `lib/db.ts`, `lib/env.ts`, `lib/session.ts`, `lib/progress.ts`, `lib/api/errors.ts`, `lib/api/request-id.ts`, `lib/api/parse-body.ts`, three route handlers). Codex review-002-api adopted (B001 zod body validation, I001 server-only modules, I002 drop ALREADY_PAID, I003 widen ErrorFields, I004 wording, N001 canonical DTO doc, N002 README env note; N003 unit tests deferred to T-203). `tsc --noEmit` + `next build` + offline cURL matrix (incl. wrong content-type / malformed JSON / unknown field) all pass. **Still pending before merge**: T-102 (Supabase) → live `POST /sessions` happy path + cookie reuse + GET /sessions/me with real cookie + deleted-session 401 branch → Codex re-review of review-002-api.
+- T-101 / T-104 / T-105 — Claude — `feature/session-progress-api`: code shipped + all four DB-touching paths from review-002 I004 verified against live Supabase (POST /sessions create, POST /sessions cookie reuse, GET /sessions/me with valid cookie, GET /sessions/me after manual session DELETE → 401). Awaits Codex re-review of `reviews/review-002-api.md` before merge to `main`.
 
 ## Done
 
@@ -70,4 +69,5 @@ Owner is who does the work; reviews follow the AGENTS.md §5 flow.
 - 2026-05-18 — Claude — Merged `feature/db-schema` into `main` with `--no-ff` (merge commit `2a56382`); deleted the feature branch.
 - 2026-05-18 — Claude — Created `feature/session-progress-api`; shipped T-101 (Next.js 14 App Router skeleton) + T-104 (`lib/session.ts` with HMAC-signed cookies, constant-time signature check, computeCurrentStep helper) + T-105 (3 route handlers). Supporting infrastructure: `lib/db.ts` (Prisma singleton with globalThis hot-reload pattern), `lib/env.ts` (Zod env validation), `lib/api/errors.ts` (error envelope + status helpers mirroring `docs/04 §Error model`), `lib/api/request-id.ts` (`X-Request-Id` echo/mint). `next build` passes; offline smoke tests confirm `/healthz` 200, `/sessions/me` 401 NO_SESSION on missing + tampered cookies.
 - 2026-05-18 — Codex — `reviews/review-002-api.md` (1 Blocking, 4 Important, 3 Nice-to-have).
+- 2026-05-18 — Owner + Claude — T-102 Supabase project provisioned (region `aws-1-us-east-1`, pooler URL on port 6543, direct URL on port 5432). Password URL-encoded (`/` → `%2F`) and written to local `.env` (gitignored). `npm run db:deploy` applied initial migration cleanly; introspection confirms 4 tables + 8 native enums + partial unique index `payment_one_success_per_session_idx` + FK delete actions (CASCADE on assessment/result, RESTRICT on payment) match `prisma/schema.prisma` and `docs/03-database-design.md`. Cookie-jar smoke test against live DB verified all four paths from review-002 I004.
 - 2026-05-18 — Claude — Adopted 7/8 review-002 findings on `feature/session-progress-api`. New: `lib/api/parse-body.ts` + `lib/progress.ts`. Changed: `POST /api/v1/sessions` validates `z.object({}).strict()` (B001); `lib/session.ts`/`lib/db.ts`/`lib/env.ts` now `import "server-only"` (I001); `computeCurrentStep` + `STEP_ORDER` moved to pure `lib/progress.ts` (I001); `ALREADY_PAID` removed from `ERROR_CODES` (I002); `ErrorFields = Record<string, string | string[]>` (I003); `docs/04` canonicalised the session DTO with `createdAt` + `answers:{}` on both endpoints (N001); README env comment now states `SESSION_COOKIE_SECRET` is required from this branch onward with `openssl rand -base64 48` hint (N002); T-105 wording in README/task-board now says code shipped but pending DB smoke + re-review (I004). N003 unit tests deferred to T-203 (Codex's recommendation). `tsc --noEmit` + `next build` pass; cURL matrix verifies `BAD_REQUEST` / `VALIDATION_ERROR` / `INTERNAL_ERROR` envelopes.
