@@ -304,7 +304,7 @@ All errors share one envelope, regardless of status code:
 - **409 NOT_SUBMITTED** if `/submit` has not been called.
 - **Test invariant**: a snapshot test JSON-serialises a teaser response and
   asserts the strings `dailyCaloriesKcal`, `predictedTargetDate`,
-  `curvePoints`, and `"plan"` are **not** present.
+  `curvePoints`, `"plan"`, and `algorithmVersion` are **not** present.
 
 ---
 
