@@ -171,14 +171,22 @@ All errors share one envelope, regardless of status code:
   - Cross-field check for `weight`: if `mainGoal` is `lose_weight` then
     `targetWeightKg < weightKg`; if `gain_weight` then `>`; if `maintain`
     then `==` within ±2kg. Violations → `VALIDATION_ERROR` with both fields.
-- **200 OK**
+- **200 OK** — Canonical session DTO (same shape as §1 and §2):
   ```json
   {
     "sessionId": "1a2b…",
-    "currentStep": "height",
+    "status": "draft",
+    "currentStep": "age",
+    "entitlementStatus": "free",
+    "submitted": false,
+    "createdAt": "2026-05-18T09:30:00.000Z",
     "answers": { "gender": "female", "mainGoal": "lose_weight" }
   }
   ```
+- **400 BAD_REQUEST** if `:stepKey` is not one of the six known step
+  keys, or if the request is wrong-`Content-Type` / malformed JSON.
+- **409 ALREADY_SUBMITTED** if the session has already been submitted;
+  answers are immutable after `/submit`.
 - **409 STEP_OUT_OF_ORDER**
   ```json
   {
@@ -189,7 +197,9 @@ All errors share one envelope, regardless of status code:
     }
   }
   ```
-- **422 VALIDATION_ERROR** for bad values.
+- **422 VALIDATION_ERROR** for bad values, including the
+  weight × main_goal coherence violation, which returns messages on
+  both `weightKg` and `targetWeightKg`.
 
 ---
 
