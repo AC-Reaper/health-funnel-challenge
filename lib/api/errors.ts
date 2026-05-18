@@ -11,7 +11,6 @@ export const ERROR_CODES = {
   STEP_OUT_OF_ORDER: "STEP_OUT_OF_ORDER",
   NOT_SUBMITTED: "NOT_SUBMITTED",
   ALREADY_SUBMITTED: "ALREADY_SUBMITTED",
-  ALREADY_PAID: "ALREADY_PAID",
   VALIDATION_ERROR: "VALIDATION_ERROR",
   INCOMPLETE_ASSESSMENT: "INCOMPLETE_ASSESSMENT",
   RATE_LIMITED: "RATE_LIMITED",
@@ -20,11 +19,19 @@ export const ERROR_CODES = {
 
 export type ErrorCode = (typeof ERROR_CODES)[keyof typeof ERROR_CODES];
 
+/**
+ * Shape of the `fields` map in a validation/incomplete error. String values
+ * are field-level messages (e.g. `{ ageYears: "must be 13..100" }`); string
+ * arrays carry lists (e.g. `{ missingSteps: ["weight","activity"] }` for
+ * `INCOMPLETE_ASSESSMENT`, per docs/04-api-design.md §4).
+ */
+export type ErrorFields = Record<string, string | string[]>;
+
 interface ErrorEnvelope {
   error: {
     code: ErrorCode;
     message: string;
-    fields?: Record<string, string>;
+    fields?: ErrorFields;
     requestId: string;
   };
 }
@@ -34,7 +41,7 @@ interface JsonErrorParams {
   code: ErrorCode;
   message: string;
   requestId: string;
-  fields?: Record<string, string>;
+  fields?: ErrorFields;
 }
 
 export function jsonError({

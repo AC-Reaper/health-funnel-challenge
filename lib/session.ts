@@ -1,24 +1,17 @@
+import "server-only";
+
 import { createHmac, randomUUID, timingSafeEqual } from "node:crypto";
 
 import type { Assessment, Session, StepKey } from "@prisma/client";
 
 import { db } from "./db";
 import { env } from "./env";
+import { computeCurrentStep } from "./progress";
 
 export const COOKIE_NAME = "hfc_session";
 export const COOKIE_MAX_AGE_SECONDS = 60 * 60 * 24 * 30;
 
 const SIG_HEX_LENGTH = 64;
-
-/** Order of the 6 funnel steps. ADR-008: first incomplete = current step. */
-const STEP_ORDER = [
-  "gender",
-  "main_goal",
-  "age",
-  "height",
-  "weight",
-  "activity",
-] as const satisfies readonly StepKey[];
 
 // ---------- Cookie sign / verify (pure) ----------
 
@@ -90,36 +83,6 @@ export function buildSetCookieHeader(sid: string): string {
   ];
   if (env.NODE_ENV === "production") parts.push("Secure");
   return parts.join("; ");
-}
-
-// ---------- Progress (pure) ----------
-
-/**
- * Returns the first step whose corresponding `Assessment` column is null —
- * i.e. the first incomplete required step (ADR-008). If the assessment row
- * is null (no PATCH yet), returns "gender". If every required field is set,
- * returns the last step ("activity") — callers needing "submitted" semantics
- * should check `session.status` instead.
- */
-export function computeCurrentStep(
-  assessment: Assessment | null,
-): StepKey {
-  if (!assessment) return "gender";
-
-  const filled: Record<(typeof STEP_ORDER)[number], boolean> = {
-    gender: assessment.gender !== null,
-    main_goal: assessment.mainGoal !== null,
-    age: assessment.ageYears !== null,
-    height: assessment.heightCm !== null,
-    weight:
-      assessment.weightKg !== null && assessment.targetWeightKg !== null,
-    activity: assessment.activityLevel !== null,
-  };
-
-  for (const step of STEP_ORDER) {
-    if (!filled[step]) return step;
-  }
-  return STEP_ORDER[STEP_ORDER.length - 1]!;
 }
 
 // ---------- Repository (I/O) ----------
