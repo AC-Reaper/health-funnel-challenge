@@ -168,9 +168,15 @@ All errors share one envelope, regardless of status code:
     `409 STEP_OUT_OF_ORDER` and include `firstMissingStep` in `fields`.
   - Editing a step that has already been saved is allowed (idempotent
     upsert).
-  - Cross-field check for `weight`: if `mainGoal` is `lose_weight` then
-    `targetWeightKg < weightKg`; if `gain_weight` then `>`; if `maintain`
-    then `==` within ±2kg. Violations → `VALIDATION_ERROR` with both fields.
+  - Cross-field check (weight × main_goal): if `mainGoal` is
+    `lose_weight` then `targetWeightKg < weightKg`; if `gain_weight`
+    then `>`; if `maintain` then within ±2kg. Violations →
+    `VALIDATION_ERROR` with both `weightKg` and `targetWeightKg` fields.
+    The same rule is enforced **symmetrically** when PATCH-ing
+    `main_goal` against an already-saved weight pair — in that case
+    the violation surfaces on `mainGoal` and `targetWeightKg`
+    (review-002 I005). `build_muscle` is intentionally unconstrained
+    (review-002 N004); see §3 closing note.
 - **200 OK** — Canonical session DTO (same shape as §1 and §2):
   ```json
   {

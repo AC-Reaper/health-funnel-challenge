@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  checkMainGoalChange,
   checkWeightCoherence,
   firstMissingPrereq,
   projectAssessment,
@@ -233,5 +234,52 @@ describe("checkWeightCoherence", () => {
     it("accepts target < current", () => {
       expect(checkWeightCoherence("build_muscle", 80, 70)).toBeNull();
     });
+  });
+});
+
+// ---------- checkMainGoalChange (review-002 I005) ----------
+
+describe("checkMainGoalChange", () => {
+  it("returns null when no weight pair has been stored yet", () => {
+    expect(checkMainGoalChange(null, null, "lose_weight")).toBeNull();
+    expect(checkMainGoalChange(80, null, "gain_weight")).toBeNull();
+    expect(checkMainGoalChange(null, 70, "maintain")).toBeNull();
+  });
+
+  it("rejects switching to gain_weight when the saved pair is a loss (80 -> 70)", () => {
+    const v = checkMainGoalChange(80, 70, "gain_weight");
+    expect(v).not.toBeNull();
+    expect(v?.fields.mainGoal).toContain("gain_weight");
+    expect(v?.fields.mainGoal).toContain("80");
+    expect(v?.fields.mainGoal).toContain("70");
+    expect(v?.fields.targetWeightKg).toContain("PATCH /api/v1/sessions/me/steps/weight");
+  });
+
+  it("rejects switching to lose_weight when the saved pair is a gain (70 -> 80)", () => {
+    expect(checkMainGoalChange(70, 80, "lose_weight")).not.toBeNull();
+  });
+
+  it("rejects switching to maintain when the pair drifts more than 2 kg", () => {
+    expect(checkMainGoalChange(80, 70, "maintain")).not.toBeNull();
+    expect(checkMainGoalChange(80, 82.1, "maintain")).not.toBeNull();
+  });
+
+  it("accepts switching to maintain when the pair is within ±2 kg", () => {
+    expect(checkMainGoalChange(80, 80, "maintain")).toBeNull();
+    expect(checkMainGoalChange(80, 81.5, "maintain")).toBeNull();
+    expect(checkMainGoalChange(80, 78, "maintain")).toBeNull();
+  });
+
+  it("accepts switching to build_muscle in any direction (N004)", () => {
+    expect(checkMainGoalChange(80, 70, "build_muscle")).toBeNull();
+    expect(checkMainGoalChange(70, 70, "build_muscle")).toBeNull();
+    expect(checkMainGoalChange(70, 80, "build_muscle")).toBeNull();
+  });
+
+  it("accepts coherent switches", () => {
+    // saved 80->70 stays coherent with lose_weight
+    expect(checkMainGoalChange(80, 70, "lose_weight")).toBeNull();
+    // saved 70->80 stays coherent with gain_weight
+    expect(checkMainGoalChange(70, 80, "gain_weight")).toBeNull();
   });
 });

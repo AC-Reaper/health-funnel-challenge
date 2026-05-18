@@ -10,6 +10,7 @@ import {
 import { parseJsonBody } from "@/lib/api/parse-body";
 import { getRequestId } from "@/lib/api/request-id";
 import {
+  checkMainGoalChange,
   checkWeightCoherence,
   firstMissingPrereq,
   projectAssessment,
@@ -98,6 +99,30 @@ export async function PATCH(
             fields: violation.fields,
           });
         }
+      }
+    }
+
+    // review-002 I005: PATCH main_goal against a saved weight pair must
+    // not leave the assessment incoherent. The check runs against the
+    // currently-stored pair (Decimal -> number via projected) and the
+    // newly-requested mainGoal.
+    if (stepKey === "main_goal") {
+      const newMainGoal = projected.mainGoal;
+      const violation =
+        newMainGoal &&
+        checkMainGoalChange(
+          projected.weightKg,
+          projected.targetWeightKg,
+          newMainGoal,
+        );
+      if (violation) {
+        return jsonError({
+          status: 422,
+          code: ERROR_CODES.VALIDATION_ERROR,
+          message: "mainGoal is inconsistent with the saved weightKg / targetWeightKg pair.",
+          requestId,
+          fields: violation.fields,
+        });
       }
     }
 

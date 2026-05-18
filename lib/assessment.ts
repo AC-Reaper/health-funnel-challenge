@@ -118,6 +118,42 @@ function weightCoherenceError(
   };
 }
 
+export interface MainGoalChangeError {
+  ok: false;
+  fields: Record<"mainGoal" | "targetWeightKg", string>;
+}
+
+/**
+ * Pure helper: enforces the weight × main_goal rule when the user changes
+ * `main_goal` and a `weight` pair is already stored (review-002 I005).
+ * Returns null if either weight field is unset (no possible conflict) or
+ * if the new goal is coherent with the stored pair; otherwise returns a
+ * field-message map suitable for a `422 VALIDATION_ERROR` envelope.
+ */
+export function checkMainGoalChange(
+  currentWeightKg: number | null,
+  currentTargetWeightKg: number | null,
+  newMainGoal: MainGoal,
+): MainGoalChangeError | null {
+  if (currentWeightKg === null || currentTargetWeightKg === null) return null;
+
+  const violation = checkWeightCoherence(
+    newMainGoal,
+    currentWeightKg,
+    currentTargetWeightKg,
+  );
+  if (!violation) return null;
+
+  return {
+    ok: false,
+    fields: {
+      mainGoal: `saved weight pair (weightKg=${currentWeightKg}, targetWeightKg=${currentTargetWeightKg}) is incompatible with mainGoal='${newMainGoal}'`,
+      targetWeightKg:
+        "incompatible with new mainGoal; PATCH /api/v1/sessions/me/steps/weight first",
+    },
+  };
+}
+
 // ---------- Pure step-projection helpers (no I/O) ----------
 //
 // Extracted from the PATCH route so they can be unit-tested without a
