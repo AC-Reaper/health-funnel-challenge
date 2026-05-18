@@ -11,3 +11,4 @@
 - 2026-05-18: Re-reviewed `feature/db-schema` at `cc40d3d`. Original review-003 Blocking and Important findings are resolved; only a docs-only ER diagram type-label nit remains.
 - 2026-05-18: Reviewed `feature/session-progress-api` and wrote interim `reviews/review-002-api.md`. Main blocker: `POST /api/v1/sessions` skips Zod/body validation despite ADR-005.
 - 2026-05-18: Re-reviewed `feature/session-progress-api` at `11098e3`. Body validation, server-only boundaries, stale payment code, and DTO docs are fixed locally; live `POST /sessions` happy-path smoke remains pending on T-102.
+- 2026-05-18: Scanned `db992ab`; live Supabase smoke coverage is sufficient to close review-002 I004 for T-101/T-104/T-105. Branch is mergeable from the session-foundation review perspective; step API review still needed after T-202.

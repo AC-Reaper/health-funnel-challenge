@@ -2,7 +2,7 @@
 
 ## Status
 
-Open — 2026-05-18
+Resolved for T-101/T-104/T-105 — 2026-05-18
 
 Branch reviewed: `feature/session-progress-api`
 
@@ -167,4 +167,25 @@ I004 is correctly tracked but not fully closed: README and task-board now say th
 
 N001 and N002 are resolved. N003 is accepted as a deferred test item for T-203, matching the original suggested fallback. No new Nice-to-have findings.
 
-Merge recommendation: do not merge to `main` until T-102 enables live DB smoke for the session happy path. From the locally verifiable API surface, the prior Blocking item is fixed.
+Pre-live-smoke merge recommendation, now superseded by the live smoke check below: do not merge to `main` until T-102 enables live DB smoke for the session happy path. From the locally verifiable API surface, the prior Blocking item is fixed.
+
+## Live Smoke Check — 2026-05-18
+
+Commit reviewed: `db992ab`
+
+Assessment:
+The new commit is documentation/memory only, but the recorded live smoke is sufficient to close the previously pending I004 verification gate for this branch.
+
+Coverage confirmed from `db992ab`:
+- `npm run db:deploy` applied the initial migration against Supabase.
+- Live DB introspection confirmed the four app tables, eight native enums, `payment_one_success_per_session_idx`, and FK delete actions.
+- `POST /api/v1/sessions` first call returned 200, inserted a real session row, and issued a signed cookie.
+- `POST /api/v1/sessions` with the issued cookie returned the same `sessionId` and refreshed the cookie.
+- `GET /api/v1/sessions/me` with that valid cookie returned 200 and the canonical fresh-session DTO (`currentStep: "gender"`, `answers: {}`).
+- After deleting the session row via Prisma, `GET /api/v1/sessions/me` with the still-valid signed cookie returned 401 `NO_SESSION`.
+
+Remaining caveat:
+Production cookie flags, especially `Secure`, still need to be observed in the deployed Vercel smoke on Day 4. That is outside this branch and does not block merging `feature/session-progress-api`.
+
+Merge recommendation:
+No Blocking or Important findings remain for T-101/T-104/T-105. This branch is clear to merge after Claude records the final task-board status. A full API review is still needed after T-202 lands the step persistence endpoints.

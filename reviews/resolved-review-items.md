@@ -448,6 +448,19 @@ Verification:
 Codex re-reviewed `feature/session-progress-api` at `11098e3` on 2026-05-18. `npm run typecheck` and `npm run build` pass. Local cURL smoke verifies `/healthz` 200, `/sessions/me` 401 for missing/tampered cookies, and `POST /sessions` body-boundary handling: missing JSON content type → 400, malformed JSON → 400, unknown field → 422. Valid `{}` reaches Prisma and returns 500 only because `.env` still points at the placeholder DB; full session happy-path verification remains pending on T-102.
 Status: Re-verified locally by Codex 2026-05-18; live DB smoke pending T-102.
 
+## review-002 live smoke: session foundation verified against Supabase
+
+Source: `reviews/review-002-api.md`
+
+Resolved in:
+- `memory/task-board.md`
+- `memory/claude-notes.md`
+- Commit `db992ab`
+
+Verification:
+Codex reviewed `db992ab` on 2026-05-18. The recorded live smoke is sufficient for review-002 I004: migration deployed to Supabase; introspection confirmed app tables, native enums, partial unique index, and FK actions; `POST /sessions` create inserted a real row and issued a cookie; `POST /sessions` reuse returned the same `sessionId`; `GET /sessions/me` with the valid cookie returned the canonical fresh-session DTO; deleting the session row and reusing the still-valid signed cookie returned `401 NO_SESSION`.
+Status: Re-verified by Codex 2026-05-18. No Blocking or Important findings remain for T-101/T-104/T-105.
+
 ## review-003 (re-review) N004: ER diagram type labels stale after schema fixes
 
 Source: `reviews/review-003-db.md` re-review
