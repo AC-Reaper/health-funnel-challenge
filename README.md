@@ -34,12 +34,12 @@ Full decision history lives in `memory/decisions.md` (ADR-001…013).
 
 ## Status
 
-Day 1–3 features shipped. The full funnel loop runs end-to-end against
-Supabase: anonymous session → 6-step funnel persistence → submit →
-calculator → gated teaser → mock `/pay` → full result. 160 unit tests
-green; live cookie-jar smoke covers happy + sad paths for every
-endpoint. Day-4 work (polished funnel UI + Vercel deploy + finalised
-README cookie-jar walkthrough) is next.
+Day 1–4 features shipped. Full funnel loop runs end-to-end against
+Supabase: anonymous session → 6-step browser quiz → submit → calculator
+→ gated teaser → mock `/pay` → full result. 175 unit tests green; live
+cookie-jar smoke covers happy + sad paths for every endpoint. Day-5 work
+(edge-case hardening + optional `step_event` + AI collaboration log +
+Codex final review) is next.
 
 ## To be added (in implementation order)
 
@@ -48,7 +48,7 @@ README cookie-jar walkthrough) is next.
 | Day 1 | ✅ `package.json` + Prisma schema + first migration (`feature/db-schema`, merged). ✅ Next.js 14 App Router skeleton + `lib/session.ts` + first 3 endpoints (`feature/session-progress-api`, merged after live Supabase smoke). |
 | Day 2 | ✅ Zod step schemas + `PATCH /api/v1/sessions/me/steps/:stepKey` with first-incomplete-step + weight-coherence rules + vitest with 108 unit tests (`feature/funnel-persistence-api`, merged). |
 | Day 3 | ✅ Pure health calculator (`lib/health/calculator.ts`) + `POST /api/v1/sessions/me/submit` + two-serializer `GET /api/v1/results/me` (leak-tested) + mock `POST /api/v1/pay` with `Idempotency-Key` + minimal `/pay` and `/results` browser pages (`feature/assessment-result-api`, awaits Codex re-review of review-006 closeout). |
-| Day 4 | Funnel UI, `/pay` browser page, Vercel + Supabase deploy, full README (env vars, cookie-jar cURL block, Postman collection). |
+| Day 4 | ✅ Polished funnel UI (`/funnel` server-bootstrapped stepper, Tailwind), `/pay` UX gate on `GET /results/me` (closes review-006 N003), `/results` restyle, Vercel + Supabase deploy, cookie-jar cURL walkthrough below (`feature/frontend-funnel`). |
 | Day 5 | Edge-case hardening, optional `step_event`, schema diagram, AI collaboration log, Codex final review. |
 
 ## Code management
@@ -70,39 +70,121 @@ Commit messages use Conventional Commits, for example
 `feat: implement anonymous session api` or
 `docs: add api examples and paid session instructions`.
 
-## Setup (current — final demo block lands Day 4)
+## Setup
 
 ```bash
-# 1. Clone
+# 1. Clone + install
 git clone <repo-url> && cd health-funnel-challenge
-
-# 2. Install
 npm install
 
-# 3. Env vars
+# 2. Env vars
 cp .env.example .env
-# fill DATABASE_URL (Supabase pooled, port 6543) and
-# DIRECT_URL (Supabase direct, port 5432).
-# SESSION_COOKIE_SECRET is required from feature/session-progress-api
-# onward (lib/env.ts enforces min 32 chars at boot). Generate with:
-#   openssl rand -base64 48
+# DATABASE_URL  — Supabase pooled URL (port 6543) with
+#                 ?pgbouncer=true&connection_limit=1
+# DIRECT_URL    — Supabase direct URL (port 5432); used by Prisma migrations
+# SESSION_COOKIE_SECRET — 32+ bytes; openssl rand -base64 48
 
-# 4. Generate Prisma client (no DB required)
+# 3. Generate Prisma client + apply migrations (DIRECT_URL must reach Postgres)
 npm run db:generate
-
-# 5. Apply migrations (requires DIRECT_URL pointing at Postgres)
 npm run db:deploy
+
+# 4. Dev server
+npm run dev   # http://localhost:3000
 ```
 
-`npm run dev` starts the Next.js dev server on port 3000.
-`npm run typecheck` runs `tsc --noEmit`. Node 20 LTS is pinned via
-`.nvmrc`.
+| Command | What it does |
+| - | - |
+| `npm run dev` | Next dev server on :3000 |
+| `npm run build` | `prisma generate` + `next build` (used on Vercel) |
+| `npm run start` | Production server (after `npm run build`) |
+| `npm run typecheck` | `tsc --noEmit` |
+| `npm test` | Vitest, 175 unit tests |
+| `npm run db:deploy` | `prisma migrate deploy` against `DIRECT_URL` |
 
-## Demo path (placeholder — final cURL cookie-jar block lands Day 4)
+Node 20 LTS is pinned via `.nvmrc`.
 
-The full reproducible flow (create session → save 6 steps → submit →
-teaser → `/pay` → full) is drafted in `docs/04-api-design.md` and will be
-copied into this README on Day 4 once the deployed URL exists.
+## Deploy (Vercel + Supabase)
+
+1. **Provision Supabase**: create a project, copy the pooled connection
+   string (Connection pooling → Transaction mode, port 6543) into
+   `DATABASE_URL`, and the direct connection string (port 5432) into
+   `DIRECT_URL`. URL-encode any special chars in the password
+   (`/` → `%2F`).
+2. **Apply migrations**: `npm run db:deploy` from a local machine that
+   can reach `DIRECT_URL`. Vercel's build does **not** run migrations.
+3. **Create Vercel project**: import the repo; framework preset
+   `Next.js` (auto). Leave Build/Install commands at defaults.
+4. **Set env vars in Vercel**: `DATABASE_URL` (pooled, with the
+   `?pgbouncer=true&connection_limit=1` query string), `DIRECT_URL`
+   (direct), `SESSION_COOKIE_SECRET` (≥ 32 chars). Set them for the
+   `Production` environment (and `Preview` if previewing PRs).
+5. **Deploy**. After the first deploy succeeds, visit the URL; the
+   `Set-Cookie` for `hfc_session` should include `Secure; HttpOnly;
+   SameSite=Lax` (`lib/session.ts` toggles `Secure` on `NODE_ENV ===
+   "production"`, which Vercel sets at runtime).
+
+## Demo path (cookie-jar cURL walkthrough)
+
+Reproduces the full loop end-to-end against `$BASE` (set to
+`http://localhost:3000` or your deployed URL). Uses one cookie jar so
+the signed `hfc_session` carries the same session id across every
+request.
+
+```bash
+BASE="http://localhost:3000"   # or your Vercel URL
+JAR="$(mktemp)"
+
+# 1. Liveness check
+curl -sS "$BASE/api/v1/healthz" | jq
+
+# 2. Create an anonymous session — Set-Cookie writes hfc_session=...
+curl -sS -c "$JAR" -b "$JAR" -X POST "$BASE/api/v1/sessions" \
+  -H "Content-Type: application/json" -d '{}' | jq
+grep hfc_session "$JAR"
+
+# 3. Resume the session — currentStep === "gender"
+curl -sS -b "$JAR" "$BASE/api/v1/sessions/me" | jq
+
+# 4. Walk all six steps. currentStep advances to "main_goal", "age",
+#    "height", "weight", "activity" between calls.
+for body in \
+  '{"stepKey":"gender","body":{"gender":"female"}}' \
+  '{"stepKey":"main_goal","body":{"mainGoal":"lose_weight"}}' \
+  '{"stepKey":"age","body":{"ageYears":29}}' \
+  '{"stepKey":"height","body":{"heightCm":168}}' \
+  '{"stepKey":"weight","body":{"weightKg":80,"targetWeightKg":70}}' \
+  '{"stepKey":"activity","body":{"activityLevel":"moderate"}}'
+do
+  step=$(echo "$body" | jq -r .stepKey)
+  payload=$(echo "$body" | jq -c .body)
+  curl -sS -b "$JAR" -X PATCH "$BASE/api/v1/sessions/me/steps/$step" \
+    -H "Content-Type: application/json" -d "$payload" | jq '.currentStep, .answers'
+done
+
+# 5. Sad path: ask for results BEFORE submit — 409 NOT_SUBMITTED
+curl -sS -b "$JAR" "$BASE/api/v1/results/me" | jq
+
+# 6. Submit. Idempotent on session_id UNIQUE: a second call returns the
+#    same payload and never inserts a second row.
+curl -sS -b "$JAR" -X POST "$BASE/api/v1/sessions/me/submit" \
+  -H "Content-Type: application/json" -d '{}' | jq
+
+# 7. Teaser: GET /results/me returns kind="teaser" with bmi + headline.
+#    Note no dailyCaloriesKcal / predictedTargetDate / curvePoints /
+#    plan / algorithmVersion fields are present — leak-tested.
+curl -sS -b "$JAR" "$BASE/api/v1/results/me" | jq
+
+# 8. Mock pay with an Idempotency-Key. Replay returns the same row.
+#    A new key on a paid session is a silent no-op (ADR-012).
+KEY=$(uuidgen)
+curl -sS -b "$JAR" -X POST "$BASE/api/v1/pay" \
+  -H "Content-Type: application/json" -H "Idempotency-Key: $KEY" -d '{}' | jq
+curl -sS -b "$JAR" "$BASE/api/v1/results/me" | jq   # now kind="full"
+```
+
+Browser path (same flow, polished UI): visit `$BASE/`, click **Start the
+quiz**, complete six steps, hit **Pay**, land on the full plan at
+`$BASE/results`.
 
 ## Documentation
 
