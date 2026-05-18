@@ -1,0 +1,182 @@
+// Health Funnel Challenge — Prisma schema (v1, feature/db-schema)
+//
+// Mirrors the logical model in `docs/02-architecture.md` §3 and ADR-007/009/012.
+// Notes:
+//   - Anonymous sessions only (no `user` table, ADR-004).
+//   - Entitlement lives on `session` (no `subscription` table, ADR-007).
+//   - `step_event` is deferred (ADR-009) — not in this schema.
+//   - Validation is enforced in app code by Zod (ADR-005); the DB stores
+//     the data but does not duplicate boundary checks.
+
+generator client {
+  provider        = "prisma-client-js"
+  previewFeatures = []
+}
+
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
+}
+
+// --- Enums ---------------------------------------------------------------
+
+enum SessionStatus {
+  draft
+  submitted
+
+  @@map("session_status")
+}
+
+enum StepKey {
+  gender
+  main_goal
+  age
+  height
+  weight
+  activity
+
+  @@map("step_key")
+}
+
+enum EntitlementStatus {
+  free
+  paid
+
+  @@map("entitlement_status")
+}
+
+enum Gender {
+  female
+  male
+
+  @@map("gender")
+}
+
+enum MainGoal {
+  lose_weight
+  maintain
+  gain_weight
+  build_muscle
+
+  @@map("main_goal")
+}
+
+enum ActivityLevel {
+  sedentary
+  light
+  moderate
+  active
+  very_active
+
+  @@map("activity_level")
+}
+
+enum BmiCategory {
+  underweight
+  normal
+  overweight
+  obese_i
+  obese_ii
+  obese_iii
+
+  @@map("bmi_category")
+}
+
+enum PaymentStatus {
+  succeeded
+  failed
+
+  @@map("payment_status")
+}
+
+// --- Models --------------------------------------------------------------
+
+/// One row per anonymous funnel attempt. Also carries the entitlement
+/// flag (ADR-007), so the gated read does not need a join.
+model Session {
+  id                String            @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  status            SessionStatus     @default(draft)
+  /// Cached pointer to the current step. The canonical value is recomputed
+  /// in app code as the first incomplete required step (ADR-008).
+  currentStep       StepKey?          @map("current_step")
+  entitlementStatus EntitlementStatus @default(free) @map("entitlement_status")
+  paidAt            DateTime?         @map("paid_at") @db.Timestamptz(6)
+  submittedAt       DateTime?         @map("submitted_at") @db.Timestamptz(6)
+  createdAt         DateTime          @default(now()) @map("created_at") @db.Timestamptz(6)
+  /// Prisma `@updatedAt` so every write through the client refreshes the
+  /// timestamp, including step edits that leave `currentStep` unchanged.
+  updatedAt         DateTime          @updatedAt @map("updated_at") @db.Timestamptz(6)
+  userAgent         String?           @map("user_agent")
+
+  assessment Assessment?
+  result     Result?
+  payments   Payment[]
+
+  @@index([updatedAt])
+  @@map("session")
+}
+
+/// 1:1 with Session. Nullable columns are the partial-progress mechanism;
+/// Zod owns boundary validation per ADR-005.
+model Assessment {
+  sessionId      String         @id @map("session_id") @db.Uuid
+  gender         Gender?
+  mainGoal       MainGoal?      @map("main_goal")
+  ageYears       Int?           @map("age_years")
+  heightCm       Int?           @map("height_cm")
+  weightKg       Decimal?       @map("weight_kg") @db.Decimal(5, 2)
+  targetWeightKg Decimal?       @map("target_weight_kg") @db.Decimal(5, 2)
+  activityLevel  ActivityLevel? @map("activity_level")
+  updatedAt      DateTime       @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  session Session @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+
+  @@map("assessment")
+}
+
+/// Immutable snapshot per submitted session. Re-computing would invalidate
+/// the algorithm-versioning story; we never overwrite a row.
+model Result {
+  id                  String      @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  sessionId           String      @unique @map("session_id") @db.Uuid
+  /// `decimal(5,2)` so the API-admitted boundary `heightCm=120, weightKg=250`
+  /// (BMI ≈ 173.61) fits without overflowing the column.
+  bmi                 Decimal     @db.Decimal(5, 2)
+  bmiCategory         BmiCategory @map("bmi_category")
+  dailyCaloriesKcal   Int         @map("daily_calories_kcal")
+  /// Null when the goal is unrealistic (|target − current| / current > 0.30,
+  /// see calculator notes in docs/02-architecture.md §4).
+  predictedTargetDate DateTime?   @map("predicted_target_date") @db.Date
+  curvePointsJson     Json        @default("[]") @map("curve_points_json") @db.JsonB
+  planJson            Json?       @map("plan_json") @db.JsonB
+  algorithmVersion    String      @map("algorithm_version")
+  computedAt          DateTime    @default(now()) @map("computed_at") @db.Timestamptz(6)
+
+  session Session @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+
+  @@map("result")
+}
+
+/// One row per `/pay` attempt that reaches the DB. Two layers of integrity:
+///   1. `UNIQUE (session_id, idempotency_key)` — same-key replays converge
+///      on the same row (`INSERT ... ON CONFLICT DO NOTHING`).
+///   2. A partial unique index on `(session_id) WHERE status='succeeded'`,
+///      added in the migration SQL because Prisma cannot model partial
+///      indexes — backstops ADR-012 "one successful payment per session".
+/// FK is RESTRICT, not CASCADE: payments are audit data and the constraint
+/// must prevent accidental session deletes from erasing that audit data.
+model Payment {
+  id             String        @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  sessionId      String        @map("session_id") @db.Uuid
+  idempotencyKey String        @map("idempotency_key") @db.VarChar(128)
+  status         PaymentStatus
+  amountCents    Int           @map("amount_cents")
+  currency       String        @db.Char(3)
+  createdAt      DateTime      @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  session Session @relation(fields: [sessionId], references: [id], onDelete: Restrict)
+
+  @@unique([sessionId, idempotencyKey])
+  @@map("payment")
+}

@@ -221,6 +221,128 @@ Verification:
 Wording is now "Claude requests `reviews/review-NNN-*.md`; Codex writes it" — splitting trigger ownership from review authorship.
 Status: Resolved 2026-05-18.
 
+## review-003 B001: result.bmi decimal(4,2) overflow on API-admitted boundary
+
+Source: `reviews/review-003-db.md`
+
+Resolved in:
+- `prisma/schema.prisma` (`Result.bmi` → `Decimal(5,2)`)
+- `prisma/migrations/20260518000000_init/migration.sql`
+- `docs/03-database-design.md` §3 (Result table)
+
+Verification:
+`heightCm=120, weightKg=250` yields BMI ≈ 173.61, which now fits in `decimal(5,2)`. A submit fixture for the boundary will be added in T-301 (Day 3).
+Status: Resolved 2026-05-18.
+
+## review-003 I001: payment table missing "one successful payment per session" backstop
+
+Source: `reviews/review-003-db.md`
+
+Resolved in:
+- `prisma/migrations/20260518000000_init/migration.sql` (appended SQL-only partial unique index `payment_one_success_per_session_idx ON payment(session_id) WHERE status='succeeded'`)
+- `prisma/schema.prisma` (documented in the `Payment` model docstring)
+- `docs/03-database-design.md` §3 + §5
+
+Verification:
+Even if a future `/pay` handler regressed past the application-level `ON CONFLICT` logic, a second `succeeded` row for the same session would fail to insert. `failed` rows remain unconstrained for audit flexibility.
+Status: Resolved 2026-05-18.
+
+## review-003 I002: timestamp freshness relied on manual updates
+
+Source: `reviews/review-003-db.md`
+
+Resolved in:
+- `prisma/schema.prisma` (`Session.updatedAt` and `Assessment.updatedAt` use `@updatedAt`)
+- `prisma/migrations/20260518000000_init/migration.sql` (NOT NULL columns; Prisma sets the value on every write)
+- `docs/03-database-design.md` §3
+
+Verification:
+Every Prisma write — including step edits that leave `current_step` unchanged — now refreshes the timestamp. Raw SQL inserts outside Prisma would need to supply the value explicitly; this is acceptable because every write path in this project goes through Prisma.
+Status: Resolved 2026-05-18.
+
+## review-003 I003: payment text fields wider than the API contract
+
+Source: `reviews/review-003-db.md`
+
+Resolved in:
+- `prisma/schema.prisma` (`Payment.idempotencyKey` → `VarChar(128)`, `Payment.currency` → `Char(3)`)
+- `prisma/migrations/20260518000000_init/migration.sql`
+- `docs/03-database-design.md` §3 (Payment table)
+
+Verification:
+The DB now refuses an idempotency key longer than 128 chars or a currency value that is not exactly 3 chars, regardless of validation regressions.
+Status: Resolved 2026-05-18.
+
+## review-003 I004: API example used a prefixed payment id while schema stores UUIDs
+
+Source: `reviews/review-003-db.md`
+
+Resolved in:
+- `docs/04-api-design.md` §7 (`paymentId` example now shows a UUID)
+
+Verification:
+The doc example matches `payment.id`'s UUID type. No `public_id` column was introduced.
+Status: Resolved 2026-05-18.
+
+## review-003 N001: README status was stale for the db-schema branch
+
+Source: `reviews/review-003-db.md`
+
+Resolved in:
+- `README.md` (Status section)
+
+Verification:
+Status now reads "DB schema and initial migration shipped on `feature/db-schema`; no API or frontend application code yet."
+Status: Resolved 2026-05-18.
+
+## review-003 N002: payment FK rationale wording was imprecise
+
+Source: `reviews/review-003-db.md`
+
+Resolved in:
+- `docs/03-database-design.md` §3 (Payment table) — reworded to "prevent accidental session deletes from erasing audit data" instead of "must outlive any accidental session delete".
+
+Verification:
+Wording now matches `ON DELETE RESTRICT` semantics: the delete is blocked, not bypassed.
+Status: Resolved 2026-05-18.
+
+## review-003 N003: migration runbook overstated bit-for-bit parity
+
+Source: `reviews/review-003-db.md`
+
+Resolved in:
+- `docs/03-database-design.md` §6 — now reads "matches Prisma's diff output, with two intentional additions: `pgcrypto` prepended, and the partial unique index appended".
+
+Verification:
+The committed migration's two extra blocks are explicitly documented.
+Status: Resolved 2026-05-18.
+
+## review-003 re-review: Blocking and Important fixes verified
+
+Source: `reviews/review-003-db.md`
+
+Resolved in:
+- `prisma/schema.prisma`
+- `prisma/migrations/20260518000000_init/migration.sql`
+- `docs/03-database-design.md`
+- `docs/04-api-design.md`
+- `README.md`
+
+Verification:
+Codex re-reviewed `feature/db-schema` at `cc40d3d` on 2026-05-18. `npm run db:validate`, `npm run db:generate`, `npx prisma migrate diff --from-empty --to-schema-datamodel prisma/schema.prisma --script`, and `git diff --check` all pass for the locally verifiable surface. Original review-003 B001 and I001-I004 are resolved. One new docs-only Nice-to-have remains: the ER diagram type labels should be refreshed to match the final schema.
+Status: Re-verified by Codex 2026-05-18.
+
+## review-003 (re-review) N004: ER diagram type labels stale after schema fixes
+
+Source: `reviews/review-003-db.md` re-review
+
+Resolved in:
+- `docs/03-database-design.md` §2 Mermaid block
+
+Verification:
+`RESULT.bmi` is now labelled `decimal_5_2`; `PAYMENT.idempotency_key` is `varchar_128`; `PAYMENT.currency` is `char_3`. Diagram matches the table reference, Prisma schema, and migration SQL.
+Status: Resolved 2026-05-18.
+
 ## review-005 N002: Day-1 docs risk becoming long-form essays
 
 Source: `reviews/review-005-governance-scaffold.md`
