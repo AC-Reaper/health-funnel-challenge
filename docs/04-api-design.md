@@ -207,6 +207,15 @@ All errors share one envelope, regardless of status code:
   weight × main_goal coherence violation, which returns messages on
   both `weightKg` and `targetWeightKg`.
 
+> **Note (build_muscle semantics, review-002 N004).** The cross-field
+> rule does **not** constrain `build_muscle` in either direction.
+> This is intentional — recomposition users may keep
+> `targetWeightKg ≈ weightKg` (losing fat while gaining muscle), gain
+> mass (`targetWeightKg > weightKg`), or even cut to a leaner physique
+> (`targetWeightKg < weightKg`). If a future product decision tightens
+> this, the change goes through an ADR and a new test in
+> `tests/lib/assessment.test.ts`.
+
 ---
 
 ### 4. Submit
