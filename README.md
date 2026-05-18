@@ -34,16 +34,19 @@ Full decision history lives in `memory/decisions.md` (ADR-001…013).
 
 ## Status
 
-DB schema and initial migration shipped on `feature/db-schema`; no API
-or frontend application code yet. ADR-001…013 are accepted and
-`memory/open-questions.md` has no open blocker. Live `prisma migrate
-deploy` is waiting on Supabase provisioning (T-102).
+Next.js 14 App Router skeleton, signed-cookie session library, and the
+first three `/api/v1` endpoints (`POST /sessions`, `GET /sessions/me`,
+`GET /healthz`) are shipped on `feature/session-progress-api`. DB
+schema and initial migration shipped earlier on `feature/db-schema`.
+ADR-001…013 are accepted and `memory/open-questions.md` has no open
+blocker. Live `prisma migrate deploy` and DB-touching endpoint
+verification are waiting on Supabase provisioning (T-102).
 
 ## To be added (in implementation order)
 
 | Day | What lands here |
 | - | - |
-| Day 1 | ✅ `package.json` + Prisma schema + first migration (shipped on `feature/db-schema`). Remaining: Next.js skeleton, signed-cookie session lib, `POST /api/v1/sessions`, `GET /api/v1/sessions/me`, `/api/v1/healthz`. |
+| Day 1 | ✅ `package.json` + Prisma schema + first migration (`feature/db-schema`). ✅ Next.js 14 App Router skeleton + `lib/session.ts` + `POST /api/v1/sessions` + `GET /api/v1/sessions/me` + `GET /api/v1/healthz` (`feature/session-progress-api`, awaits Codex `review-002-api.md`). |
 | Day 2 | Zod step schemas, `PATCH /api/v1/sessions/me/steps/:stepKey` with first-incomplete-step rule, boundary tests. |
 | Day 3 | `lib/health/calculator.ts`, `POST /api/v1/sessions/me/submit`, two-serializer `GET /api/v1/results/me`, `POST /api/v1/pay`. |
 | Day 4 | Funnel UI, `/pay` browser page, Vercel + Supabase deploy, full README (env vars, cookie-jar cURL block, Postman collection). |
@@ -91,8 +94,9 @@ npm run db:generate
 npm run db:deploy
 ```
 
-`npm run dev` is not wired yet — Next.js scaffold lands on
-`feature/session-progress-api`. Node 20 LTS is pinned via `.nvmrc`.
+`npm run dev` starts the Next.js dev server on port 3000.
+`npm run typecheck` runs `tsc --noEmit`. Node 20 LTS is pinned via
+`.nvmrc`.
 
 ## Demo path (placeholder — final cURL cookie-jar block lands Day 4)
 
