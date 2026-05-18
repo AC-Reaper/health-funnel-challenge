@@ -1,0 +1,24 @@
+{
+  "name": "health-funnel-challenge",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Health quiz funnel — 5-day full-stack challenge (Ruiqi Technology)",
+  "scripts": {
+    "db:generate": "prisma generate",
+    "db:format": "prisma format",
+    "db:validate": "prisma validate",
+    "db:deploy": "prisma migrate deploy",
+    "db:reset": "prisma migrate reset --force"
+  },
+  "dependencies": {
+    "@prisma/client": "^5.22.0"
+  },
+  "devDependencies": {
+    "@types/node": "^20.14.10",
+    "prisma": "^5.22.0",
+    "typescript": "^5.5.4"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}
