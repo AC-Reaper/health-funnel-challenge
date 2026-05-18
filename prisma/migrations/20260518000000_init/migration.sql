@@ -35,7 +35,7 @@ CREATE TABLE "session" (
     "paid_at" TIMESTAMPTZ(6),
     "submitted_at" TIMESTAMPTZ(6),
     "created_at" TIMESTAMPTZ(6) NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    "updated_at" TIMESTAMPTZ(6) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updated_at" TIMESTAMPTZ(6) NOT NULL,
     "user_agent" TEXT,
 
     CONSTRAINT "session_pkey" PRIMARY KEY ("id")
@@ -51,7 +51,7 @@ CREATE TABLE "assessment" (
     "weight_kg" DECIMAL(5,2),
     "target_weight_kg" DECIMAL(5,2),
     "activity_level" "activity_level",
-    "updated_at" TIMESTAMPTZ(6) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updated_at" TIMESTAMPTZ(6) NOT NULL,
 
     CONSTRAINT "assessment_pkey" PRIMARY KEY ("session_id")
 );
@@ -60,7 +60,7 @@ CREATE TABLE "assessment" (
 CREATE TABLE "result" (
     "id" UUID NOT NULL DEFAULT gen_random_uuid(),
     "session_id" UUID NOT NULL,
-    "bmi" DECIMAL(4,2) NOT NULL,
+    "bmi" DECIMAL(5,2) NOT NULL,
     "bmi_category" "bmi_category" NOT NULL,
     "daily_calories_kcal" INTEGER NOT NULL,
     "predicted_target_date" DATE,
@@ -76,10 +76,10 @@ CREATE TABLE "result" (
 CREATE TABLE "payment" (
     "id" UUID NOT NULL DEFAULT gen_random_uuid(),
     "session_id" UUID NOT NULL,
-    "idempotency_key" TEXT NOT NULL,
+    "idempotency_key" VARCHAR(128) NOT NULL,
     "status" "payment_status" NOT NULL,
     "amount_cents" INTEGER NOT NULL,
-    "currency" TEXT NOT NULL,
+    "currency" CHAR(3) NOT NULL,
     "created_at" TIMESTAMPTZ(6) NOT NULL DEFAULT CURRENT_TIMESTAMP,
 
     CONSTRAINT "payment_pkey" PRIMARY KEY ("id")
@@ -103,3 +103,10 @@ ALTER TABLE "result" ADD CONSTRAINT "result_session_id_fkey" FOREIGN KEY ("sessi
 -- AddForeignKey
 ALTER TABLE "payment" ADD CONSTRAINT "payment_session_id_fkey" FOREIGN KEY ("session_id") REFERENCES "session"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
 
+
+-- Partial unique index — DB-level backstop for ADR-012: at most one
+-- successful payment per session. Prisma cannot model partial indexes,
+-- so this stays SQL-only and is documented in docs/03-database-design.md.
+CREATE UNIQUE INDEX "payment_one_success_per_session_idx"
+    ON "payment" ("session_id")
+    WHERE "status" = 'succeeded';

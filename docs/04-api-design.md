@@ -312,7 +312,7 @@ All errors share one envelope, regardless of status code:
 - **200 OK**
   ```json
   {
-    "paymentId": "p_01HXY…",
+    "paymentId": "f0b8c2e4-7d3a-4d5e-9c8b-1a2b3c4d5e6f",
     "sessionId": "1a2b…",
     "status": "succeeded",
     "amountCents": 999,

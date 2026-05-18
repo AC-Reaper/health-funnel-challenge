@@ -98,7 +98,7 @@ erDiagram
 | `paid_at` | `timestamptz` | yes | — | Set in the same transaction as the entitlement flip (ADR-006). |
 | `submitted_at` | `timestamptz` | yes | — | Set by `/submit`. |
 | `created_at` | `timestamptz` | no | `now()` | |
-| `updated_at` | `timestamptz` | no | `now()` | Touched by app code on every write. No DB trigger — we keep DB-side magic to zero. |
+| `updated_at` | `timestamptz` | no | — (Prisma `@updatedAt`) | Refreshed by the Prisma client on every write, including step edits that leave `current_step` unchanged. No DB trigger. |
 | `user_agent` | `text` | yes | — | Best-effort diagnostics. |
 
 Indexes: `(updated_at)` btree. Primary key on `id`.
@@ -115,7 +115,7 @@ Indexes: `(updated_at)` btree. Primary key on `id`.
 | `weight_kg` | `decimal(5,2)` | yes | — | Zod range 30–250. |
 | `target_weight_kg` | `decimal(5,2)` | yes | — | Cross-checked against `weight_kg` and `main_goal` at the API layer. |
 | `activity_level` | `activity_level` | yes | — | |
-| `updated_at` | `timestamptz` | no | `now()` | |
+| `updated_at` | `timestamptz` | no | — (Prisma `@updatedAt`) | Refreshed on every write through the Prisma client. |
 
 Why all columns nullable: this is the partial-progress mechanism. A
 single row exists per session from step 1; columns fill in as the user
@@ -131,7 +131,7 @@ relies on the snapshot being frozen.
 | - | - | - | - | - |
 | `id` | `uuid` | no | `gen_random_uuid()` | |
 | `session_id` | `uuid` | no | — | UNIQUE + FK → `session.id`. Cascade on delete. |
-| `bmi` | `decimal(4,2)` | no | — | e.g. `24.91`. |
+| `bmi` | `decimal(5,2)` | no | — | e.g. `24.91`. Width 5 (not 4) so the API-admitted boundary `heightCm=120, weightKg=250` (BMI ≈ 173.61) fits without overflow. |
 | `bmi_category` | `bmi_category` | no | — | WHO bands (`underweight`…`obese_iii`). |
 | `daily_calories_kcal` | `int` | no | — | Floored at 1200 (female) / 1500 (male) by the calculator. |
 | `predicted_target_date` | `date` | yes | — | `NULL` when the goal is unrealistic (`|target − current| / current > 0.30`). |
@@ -146,22 +146,30 @@ relies on the snapshot being frozen.
 | - | - | - | - | - |
 | `id` | `uuid` | no | `gen_random_uuid()` | |
 | `session_id` | `uuid` | no | — | FK → `session.id`. **RESTRICT** on delete, not CASCADE. |
-| `idempotency_key` | `text` | no | — | Client-supplied. |
+| `idempotency_key` | `varchar(128)` | no | — | Client-supplied. Width matches the API contract cap so an oversized key cannot pass DB write even if validation regressed. |
 | `status` | `payment_status` | no | — | `succeeded` or `failed`. |
 | `amount_cents` | `int` | no | — | Server constant; never trusts the client. |
-| `currency` | `text` | no | — | Server constant. |
+| `currency` | `char(3)` | no | — | ISO-4217 fixed-width. Server constant. |
 | `created_at` | `timestamptz` | no | `now()` | |
 
-Constraint: `UNIQUE (session_id, idempotency_key)`. This single constraint
-is what makes `POST /api/v1/pay` replay-safe by construction (ADR-006).
-The application handler uses `INSERT … ON CONFLICT DO NOTHING` then
-either selects the existing row (same-key replay) or — if the session is
-already `paid` — skips the insert entirely and returns the existing
-entitlement (already-paid no-op, ADR-012).
+Constraints, two layers:
 
-FK behaviour rationale: payments are audit data and must outlive any
-accidental session delete. CASCADE on `assessment` and `result` is fine
-because those are derived from the session.
+1. `UNIQUE (session_id, idempotency_key)` — makes `POST /api/v1/pay`
+   replay-safe by construction (ADR-006). Same-key replays converge on
+   the same row via `INSERT … ON CONFLICT DO NOTHING`.
+2. `payment_one_success_per_session_idx` — a **partial unique index** on
+   `(session_id) WHERE status = 'succeeded'`, defined only in the
+   migration SQL because Prisma cannot model partial indexes. This is
+   the DB-level backstop for ADR-012: even if a future handler bug
+   tried to insert a second succeeded payment with a different
+   idempotency key, the DB would refuse. `failed` rows are unaffected,
+   so audit flexibility is preserved.
+
+FK behaviour rationale: payments are audit data, and the `RESTRICT`
+constraint prevents accidental session deletes from erasing that audit
+data (it does **not** mean payment rows outlive a successful delete —
+the delete is blocked outright). CASCADE on `assessment` and `result`
+is fine because those are derived from the session.
 
 ## 4. Enums
 
@@ -185,7 +193,8 @@ requires an ADR.
 
 - `session(updated_at)` btree — for any janitor/metrics job.
 - `result(session_id)` UNIQUE — one result per session.
-- `payment(session_id, idempotency_key)` UNIQUE — enforces idempotency.
+- `payment(session_id, idempotency_key)` UNIQUE — enforces same-key idempotency (ADR-006).
+- `payment(session_id) WHERE status='succeeded'` UNIQUE (partial) — backstops ADR-012 "one successful payment per session". Defined in SQL only; Prisma cannot model partial indexes.
 - `assessment(session_id)` is the primary key (implicit unique).
 - No additional FK indexes added: Postgres creates an index for primary
   keys and unique constraints automatically; the `payment.session_id`
@@ -194,11 +203,14 @@ requires an ADR.
 ## 6. Migration runbook
 
 - Initial migration: `prisma/migrations/20260518000000_init/migration.sql`.
-  Generated with `prisma migrate diff --from-empty
-  --to-schema-datamodel prisma/schema.prisma --script` to guarantee
-  bit-for-bit parity with `schema.prisma`. A `CREATE EXTENSION IF NOT
-  EXISTS pgcrypto;` is prepended so `gen_random_uuid()` works on any
-  Postgres install (Supabase already enables it).
+  Matches Prisma's `migrate diff --from-empty --to-schema-datamodel
+  --script` output, with two intentional additions:
+  1. `CREATE EXTENSION IF NOT EXISTS pgcrypto;` prepended, so
+     `gen_random_uuid()` works on any Postgres install (Supabase
+     already enables it).
+  2. The partial unique index
+     `payment_one_success_per_session_idx` appended at the end,
+     because Prisma cannot model partial indexes (see §5).
 - To apply against Supabase (or any Postgres):
   1. `cp .env.example .env` and fill `DATABASE_URL` (pooled) and
      `DIRECT_URL` (direct). Supabase exposes both in the project's

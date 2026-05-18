@@ -34,9 +34,10 @@ Full decision history lives in `memory/decisions.md` (ADR-001…013).
 
 ## Status
 
-Repository scaffold + design docs only. **No application code shipped
-yet.** Day-1 implementation is unblocked: ADR-001…013 are accepted and
-`memory/open-questions.md` has no open blocker.
+DB schema and initial migration shipped on `feature/db-schema`; no API
+or frontend application code yet. ADR-001…013 are accepted and
+`memory/open-questions.md` has no open blocker. Live `prisma migrate
+deploy` is waiting on Supabase provisioning (T-102).
 
 ## To be added (in implementation order)
 
