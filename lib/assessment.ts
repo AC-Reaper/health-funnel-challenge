@@ -117,3 +117,110 @@ function weightCoherenceError(
     },
   };
 }
+
+// ---------- Pure step-projection helpers (no I/O) ----------
+//
+// Extracted from the PATCH route so they can be unit-tested without a
+// Prisma client. Used by both the first-incomplete-step rule (ADR-008)
+// and the future `/submit` validator (T-302).
+
+/**
+ * The shape the assessment row would have if the patch were applied.
+ * `weightKg` / `targetWeightKg` are stored as Decimal in Postgres; the
+ * projection coerces them to `number` because the validation logic only
+ * does comparisons (gt/lt/abs), not Decimal-precise arithmetic.
+ */
+export type ProjectedAssessment = {
+  gender: Assessment["gender"] | null;
+  mainGoal: Assessment["mainGoal"] | null;
+  ageYears: number | null;
+  heightCm: number | null;
+  weightKg: number | null;
+  targetWeightKg: number | null;
+  activityLevel: Assessment["activityLevel"] | null;
+};
+
+/**
+ * Builds the assessment state as it WOULD look after the patch is applied,
+ * without writing anything to the database. Used by the first-incomplete-
+ * step check and the main_goal-coherence check, so we don't UPSERT first
+ * and roll back on validation failure.
+ */
+export function projectAssessment<K extends StepKey>(
+  current: Assessment | null,
+  stepKey: K,
+  patch: StepBody[K],
+): ProjectedAssessment {
+  const next: ProjectedAssessment = {
+    gender: current?.gender ?? null,
+    mainGoal: current?.mainGoal ?? null,
+    ageYears: current?.ageYears ?? null,
+    heightCm: current?.heightCm ?? null,
+    weightKg: current?.weightKg != null ? Number(current.weightKg) : null,
+    targetWeightKg:
+      current?.targetWeightKg != null ? Number(current.targetWeightKg) : null,
+    activityLevel: current?.activityLevel ?? null,
+  };
+
+  switch (stepKey) {
+    case "gender":
+      next.gender = (patch as StepBody["gender"]).gender;
+      break;
+    case "main_goal":
+      next.mainGoal = (patch as StepBody["main_goal"]).mainGoal;
+      break;
+    case "age":
+      next.ageYears = (patch as StepBody["age"]).ageYears;
+      break;
+    case "height":
+      next.heightCm = (patch as StepBody["height"]).heightCm;
+      break;
+    case "weight": {
+      const w = patch as StepBody["weight"];
+      next.weightKg = w.weightKg;
+      next.targetWeightKg = w.targetWeightKg;
+      break;
+    }
+    case "activity":
+      next.activityLevel = (patch as StepBody["activity"]).activityLevel;
+      break;
+  }
+  return next;
+}
+
+/** Is the specified step considered "filled" in the projected state? */
+export function stepIsFilled(p: ProjectedAssessment, step: StepKey): boolean {
+  switch (step) {
+    case "gender":
+      return p.gender !== null;
+    case "main_goal":
+      return p.mainGoal !== null;
+    case "age":
+      return p.ageYears !== null;
+    case "height":
+      return p.heightCm !== null;
+    case "weight":
+      return p.weightKg !== null && p.targetWeightKg !== null;
+    case "activity":
+      return p.activityLevel !== null;
+  }
+}
+
+/**
+ * First-incomplete-step rule (ADR-008). Walks STEP_ORDER up to (but not
+ * including) the step being saved; if any earlier required step is still
+ * unfilled in the projected state, returns that step's name. Editing an
+ * already-saved step is always allowed because its own column is already
+ * non-null in `current`.
+ */
+export function firstMissingPrereq(
+  stepKey: StepKey,
+  projected: ProjectedAssessment,
+  stepOrder: readonly StepKey[],
+): StepKey | null {
+  for (const step of stepOrder) {
+    if (step === stepKey) return null;
+    if (!stepIsFilled(projected, step)) return step;
+  }
+  return null;
+}

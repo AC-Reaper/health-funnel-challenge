@@ -11,6 +11,8 @@ import { parseJsonBody } from "@/lib/api/parse-body";
 import { getRequestId } from "@/lib/api/request-id";
 import {
   checkWeightCoherence,
+  firstMissingPrereq,
+  projectAssessment,
   upsertAssessmentField,
 } from "@/lib/assessment";
 import { STEP_ORDER } from "@/lib/progress";
@@ -23,7 +25,6 @@ import {
 } from "@/lib/session";
 import { STEP_SCHEMAS, isStepKey } from "@/lib/validation/steps";
 
-import type { Assessment, StepKey } from "@prisma/client";
 import type { z } from "zod";
 
 export const dynamic = "force-dynamic";
@@ -68,9 +69,12 @@ export async function PATCH(
 
     const current = await findAssessmentBySessionId(sid);
 
-    const projected = projectAssessment(current, stepKey, parsed.data);
+    // Safe cast: STEP_SCHEMAS[stepKey] just produced this exact body
+    // shape; projectAssessment narrows via the stepKey discriminator.
+    const patch = parsed.data as Parameters<typeof projectAssessment>[2];
+    const projected = projectAssessment(current, stepKey, patch);
 
-    const missing = firstMissingPrereq(stepKey, projected);
+    const missing = firstMissingPrereq(stepKey, projected, STEP_ORDER);
     if (missing) {
       return jsonError({
         status: 409,
@@ -82,11 +86,9 @@ export async function PATCH(
     }
 
     if (stepKey === "weight") {
-      const mainGoal = projected.mainGoal;
-      const w = projected.weightKg;
-      const t = projected.targetWeightKg;
-      if (mainGoal && w !== null && t !== null) {
-        const violation = checkWeightCoherence(mainGoal, Number(w), Number(t));
+      const { mainGoal, weightKg, targetWeightKg } = projected;
+      if (mainGoal && weightKg !== null && targetWeightKg !== null) {
+        const violation = checkWeightCoherence(mainGoal, weightKg, targetWeightKg);
         if (violation) {
           return jsonError({
             status: 422,
@@ -99,11 +101,10 @@ export async function PATCH(
       }
     }
 
-    // Safe cast: STEP_SCHEMAS[stepKey] just produced this exact body shape.
     await upsertAssessmentField(
       sid,
       stepKey,
-      parsed.data as Parameters<typeof upsertAssessmentField>[2],
+      patch as Parameters<typeof upsertAssessmentField>[2],
     );
 
     const [freshSession, freshAssessment] = await Promise.all([
@@ -126,96 +127,5 @@ export async function PATCH(
       }),
     );
     return internalError(requestId);
-  }
-}
-
-/**
- * Builds the assessment state as it would look after the patch is
- * applied. Used by the first-incomplete-step rule and by the weight
- * coherence check, so we don't UPSERT first and roll back on
- * validation failure.
- */
-type ProjectedAssessment = {
-  gender: Assessment["gender"] | null;
-  mainGoal: Assessment["mainGoal"] | null;
-  ageYears: Assessment["ageYears"] | null;
-  heightCm: Assessment["heightCm"] | null;
-  weightKg: Assessment["weightKg"] | null;
-  targetWeightKg: Assessment["targetWeightKg"] | null;
-  activityLevel: Assessment["activityLevel"] | null;
-};
-
-function projectAssessment(
-  current: Assessment | null,
-  stepKey: StepKey,
-  patch: unknown,
-): ProjectedAssessment {
-  const next: ProjectedAssessment = {
-    gender: current?.gender ?? null,
-    mainGoal: current?.mainGoal ?? null,
-    ageYears: current?.ageYears ?? null,
-    heightCm: current?.heightCm ?? null,
-    weightKg: current?.weightKg ?? null,
-    targetWeightKg: current?.targetWeightKg ?? null,
-    activityLevel: current?.activityLevel ?? null,
-  };
-
-  const p = patch as Record<string, unknown>;
-  switch (stepKey) {
-    case "gender":
-      next.gender = p.gender as ProjectedAssessment["gender"];
-      break;
-    case "main_goal":
-      next.mainGoal = p.mainGoal as ProjectedAssessment["mainGoal"];
-      break;
-    case "age":
-      next.ageYears = p.ageYears as number;
-      break;
-    case "height":
-      next.heightCm = p.heightCm as number;
-      break;
-    case "weight":
-      next.weightKg = p.weightKg as ProjectedAssessment["weightKg"];
-      next.targetWeightKg = p.targetWeightKg as ProjectedAssessment["targetWeightKg"];
-      break;
-    case "activity":
-      next.activityLevel = p.activityLevel as ProjectedAssessment["activityLevel"];
-      break;
-  }
-  return next;
-}
-
-/**
- * First-incomplete-step rule (ADR-008). Walks STEP_ORDER up to (but
- * not including) the step being saved; if any earlier required step
- * is still unfilled in the projected state, returns that step name.
- * Editing an already-saved step is always allowed because its own
- * column would already be non-null in `current`.
- */
-function firstMissingPrereq(
-  stepKey: StepKey,
-  projected: ProjectedAssessment,
-): StepKey | null {
-  for (const step of STEP_ORDER) {
-    if (step === stepKey) return null;
-    if (!stepIsFilled(projected, step)) return step;
-  }
-  return null;
-}
-
-function stepIsFilled(p: ProjectedAssessment, step: StepKey): boolean {
-  switch (step) {
-    case "gender":
-      return p.gender !== null;
-    case "main_goal":
-      return p.mainGoal !== null;
-    case "age":
-      return p.ageYears !== null;
-    case "height":
-      return p.heightCm !== null;
-    case "weight":
-      return p.weightKg !== null && p.targetWeightKg !== null;
-    case "activity":
-      return p.activityLevel !== null;
   }
 }
