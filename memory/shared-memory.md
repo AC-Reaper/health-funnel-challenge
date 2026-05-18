@@ -69,20 +69,22 @@ payment.
 
 - Architecture spec → `docs/02-architecture.md` v2
 - API contracts → `docs/04-api-design.md` v1
-- DB design → `docs/03-database-design.md` (filled on `feature/db-schema`)
+- DB design → `docs/03-database-design.md`
 - Prisma schema → `prisma/schema.prisma`
 - Initial migration → `prisma/migrations/20260518000000_init/migration.sql`
+- Session library → `lib/session.ts`
+- Route handlers → `app/api/v1/{healthz,sessions,sessions/me}/route.ts`
 - ADR log → `memory/decisions.md` (ADR-001…013 Accepted)
 - Open questions → `memory/open-questions.md` (no open blocker)
-- Latest review → `reviews/review-005-governance-scaffold.md`
-  (Open; no Blocking; 5 Important addressed)
+- Latest reviews → `reviews/review-003-db.md` (Resolved on `main`); `reviews/review-002-api.md` pending against `feature/session-progress-api`.
 
 ## Current Branch
 
-`feature/db-schema` — shipped Prisma schema + initial migration + env
-scaffolding. Awaiting Codex `reviews/review-003-db.md` (T-106) before
-merging back to `main`. Live `prisma migrate deploy` is blocked on
-Owner provisioning Supabase (T-102).
+`feature/session-progress-api` — Next.js 14 App Router skeleton +
+`lib/session.ts` + `POST /api/v1/sessions` + `GET /api/v1/sessions/me`
++ `GET /api/v1/healthz`. `feature/db-schema` is merged to `main`.
+DB-touching endpoint verification is blocked on T-102 (Supabase). The
+branch awaits Codex `reviews/review-002-api.md` (T-204) before merge.
 
 ## Code Management
 

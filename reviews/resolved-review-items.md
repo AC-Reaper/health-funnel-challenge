@@ -332,6 +332,135 @@ Verification:
 Codex re-reviewed `feature/db-schema` at `cc40d3d` on 2026-05-18. `npm run db:validate`, `npm run db:generate`, `npx prisma migrate diff --from-empty --to-schema-datamodel prisma/schema.prisma --script`, and `git diff --check` all pass for the locally verifiable surface. Original review-003 B001 and I001-I004 are resolved. One new docs-only Nice-to-have remains: the ER diagram type labels should be refreshed to match the final schema.
 Status: Re-verified by Codex 2026-05-18.
 
+## review-002 B001: POST /api/v1/sessions skipped Zod body validation
+
+Source: `reviews/review-002-api.md`
+
+Resolved in:
+- `lib/api/parse-body.ts` (new helper)
+- `app/api/v1/sessions/route.ts` (wired through the helper with `z.object({}).strict()`)
+
+Verification:
+cURL matrix on `npm run start`: wrong / missing `Content-Type` → 400 `BAD_REQUEST`; malformed JSON → 400 `BAD_REQUEST`; unknown field → 422 `VALIDATION_ERROR` with `fields._: "Unrecognized key(s)..."`; valid `{}` → DB call (500 INTERNAL_ERROR until T-102 Supabase). Helper is reusable by future POST/PATCH handlers per ADR-005.
+Status: Resolved 2026-05-18.
+
+## review-002 I001: server-only modules unprotected from client imports
+
+Source: `reviews/review-002-api.md`
+
+Resolved in:
+- `lib/session.ts`, `lib/db.ts`, `lib/env.ts` (`import "server-only"` at top)
+- `lib/progress.ts` (new pure module — extracted `STEP_ORDER` and `computeCurrentStep` so the future frontend can import them without dragging server code)
+
+Verification:
+`next build` passes. Importing any of the three server-only modules from a client component would now fail at build time with a clear error.
+Status: Resolved 2026-05-18.
+
+## review-002 I002: ALREADY_PAID error code contradicted ADR-012
+
+Source: `reviews/review-002-api.md`
+
+Resolved in:
+- `lib/api/errors.ts` (removed `ALREADY_PAID` from `ERROR_CODES`)
+
+Verification:
+`grep -rn ALREADY_PAID lib/ app/ docs/` returns no live code references; only historical mentions remain in `memory/decisions.md` (ADR-006 / ADR-012 rationale) and `memory/open-questions.md` (Q-006 history), which are correct as the historical record.
+Status: Resolved 2026-05-18.
+
+## review-002 I003: ErrorFields type too narrow for documented API
+
+Source: `reviews/review-002-api.md`
+
+Resolved in:
+- `lib/api/errors.ts` (`ErrorFields = Record<string, string | string[]>`)
+
+Verification:
+The future `INCOMPLETE_ASSESSMENT` envelope can now carry `{ missingSteps: ["weight", "activity"] }` (per `docs/04` §4) without ad-hoc stringification or fighting the shared helper.
+Status: Resolved 2026-05-18.
+
+## review-002 I004: T-105 marked shipped before live DB verification
+
+Source: `reviews/review-002-api.md`
+
+Resolved in:
+- `memory/task-board.md` (Review-column entry now reads "code shipped, awaits DB smoke + Codex re-review"; explicit list of what to verify against a migrated DB)
+- `README.md` (Day-1 row now 🟡 for `feature/session-progress-api`, not ✅)
+- Live DB smoke test against Supabase (2026-05-18, after T-102 closed)
+
+Verification:
+All four paths exercised end-to-end against a migrated Supabase Postgres:
+1. `POST /api/v1/sessions` first call → 200 + Set-Cookie + real session row inserted (`session.create` with `@updatedAt`).
+2. `POST /api/v1/sessions` second call with the issued cookie → 200, same `sessionId`, cookie re-issued (Max-Age refresh).
+3. `GET /api/v1/sessions/me` with the valid cookie → 200 with the canonical DTO (assessment is null → `currentStep:"gender"`, `answers:{}`).
+4. After `prisma.session.delete({ where: { id } })`, `GET /api/v1/sessions/me` with the same (still cryptographically valid) cookie → 401 `NO_SESSION` envelope. This is the deleted-session branch Codex specifically flagged.
+Status: Resolved 2026-05-18.
+
+## review-002 N001: response shape ahead of API doc
+
+Source: `reviews/review-002-api.md`
+
+Resolved in:
+- `docs/04-api-design.md` §1 and §2
+
+Verification:
+Both `POST /api/v1/sessions` and `GET /api/v1/sessions/me` now document the canonical session DTO including `createdAt` and `answers` (which is `{}` on a fresh session). The implementation already matched; the doc is now in sync.
+Status: Resolved 2026-05-18.
+
+## review-002 N002: README setup comment stale
+
+Source: `reviews/review-002-api.md`
+
+Resolved in:
+- `README.md` Setup section
+
+Verification:
+`SESSION_COOKIE_SECRET` is now flagged as required from `feature/session-progress-api` onward (`lib/env.ts` enforces min 32 chars at boot), with an `openssl rand -base64 48` hint.
+Status: Resolved 2026-05-18.
+
+## review-002 N003: no unit tests for pure session helpers
+
+Source: `reviews/review-002-api.md`
+
+Resolved in:
+- `memory/task-board.md` (T-203 already covers the requested boundary tests; this finding is the deferral path Codex itself proposed)
+
+Verification:
+Acknowledged as deferred until T-203 lands the Vitest setup on Day 2. No code change on this branch.
+Status: Deferred to T-203 (per Codex's suggested fallback).
+
+## review-002 re-review: local API fixes verified
+
+Source: `reviews/review-002-api.md`
+
+Resolved in:
+- `lib/api/parse-body.ts`
+- `app/api/v1/sessions/route.ts`
+- `lib/session.ts`
+- `lib/db.ts`
+- `lib/env.ts`
+- `lib/progress.ts`
+- `lib/api/errors.ts`
+- `docs/04-api-design.md`
+- `README.md`
+- `memory/task-board.md`
+
+Verification:
+Codex re-reviewed `feature/session-progress-api` at `11098e3` on 2026-05-18. `npm run typecheck` and `npm run build` pass. Local cURL smoke verifies `/healthz` 200, `/sessions/me` 401 for missing/tampered cookies, and `POST /sessions` body-boundary handling: missing JSON content type → 400, malformed JSON → 400, unknown field → 422. Valid `{}` reaches Prisma and returns 500 only because `.env` still points at the placeholder DB; full session happy-path verification remains pending on T-102.
+Status: Re-verified locally by Codex 2026-05-18; live DB smoke pending T-102.
+
+## review-002 live smoke: session foundation verified against Supabase
+
+Source: `reviews/review-002-api.md`
+
+Resolved in:
+- `memory/task-board.md`
+- `memory/claude-notes.md`
+- Commit `db992ab`
+
+Verification:
+Codex reviewed `db992ab` on 2026-05-18. The recorded live smoke is sufficient for review-002 I004: migration deployed to Supabase; introspection confirmed app tables, native enums, partial unique index, and FK actions; `POST /sessions` create inserted a real row and issued a cookie; `POST /sessions` reuse returned the same `sessionId`; `GET /sessions/me` with the valid cookie returned the canonical fresh-session DTO; deleting the session row and reusing the still-valid signed cookie returned `401 NO_SESSION`.
+Status: Re-verified by Codex 2026-05-18. No Blocking or Important findings remain for T-101/T-104/T-105.
+
 ## review-003 (re-review) N004: ER diagram type labels stale after schema fixes
 
 Source: `reviews/review-003-db.md` re-review
