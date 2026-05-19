@@ -1,12 +1,14 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 import type { SessionAnswersDTO } from "@/lib/session";
 
 import { OptionCard, StepShell } from "./StepShell";
 
 type ActivityLevel = NonNullable<SessionAnswersDTO["activityLevel"]>;
+
+const AUTO_ADVANCE_MS = 250;
 
 const OPTIONS: { value: ActivityLevel; label: string; description: string }[] = [
   { value: "sedentary", label: "Sedentary", description: "Little to no exercise" },
@@ -21,26 +23,52 @@ interface StepActivityProps {
   pending: boolean;
   error: string | null;
   onSave: (body: { activityLevel: ActivityLevel }) => Promise<void>;
+  onBack?: () => void;
 }
 
-export function StepActivity({ initial, pending, error, onSave }: StepActivityProps) {
+export function StepActivity({
+  initial,
+  pending,
+  error,
+  onSave,
+  onBack,
+}: StepActivityProps) {
   const [value, setValue] = useState<ActivityLevel | undefined>(initial);
+  const [selecting, setSelecting] = useState<ActivityLevel | null>(null);
+  const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => {
+    return () => {
+      if (timerRef.current) clearTimeout(timerRef.current);
+    };
+  }, []);
+
+  function pick(v: ActivityLevel) {
+    if (pending || selecting) return;
+    setValue(v);
+    setSelecting(v);
+    timerRef.current = setTimeout(() => {
+      void onSave({ activityLevel: v });
+    }, AUTO_ADVANCE_MS);
+  }
 
   return (
     <StepShell
       title="How active are you?"
-      hint="Drives the calorie estimate."
+      hint="Drives the calorie estimate. Picking this finishes the quiz."
       pending={pending}
       error={error}
-      canContinue={value !== undefined}
-      onContinue={() => value && onSave({ activityLevel: value })}
-      continueLabel="See my plan"
+      canContinue={false}
+      autoAdvance
+      onBack={onBack}
     >
       {OPTIONS.map((o) => (
         <OptionCard
           key={o.value}
           selected={value === o.value}
-          onSelect={() => setValue(o.value)}
+          selecting={selecting === o.value}
+          disabled={pending || selecting !== null}
+          onSelect={() => pick(o.value)}
           label={o.label}
           description={o.description}
         />

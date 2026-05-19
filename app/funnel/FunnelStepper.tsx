@@ -5,6 +5,7 @@ import { useState } from "react";
 
 import type { StepKey } from "@prisma/client";
 
+import { STEP_ORDER } from "@/lib/progress";
 import type { SessionDTO } from "@/lib/session";
 
 import { ProgressBar } from "./ProgressBar";
@@ -35,9 +36,20 @@ function pickFieldMessage(
   return undefined;
 }
 
+function prevStep(s: StepKey): StepKey | null {
+  const i = STEP_ORDER.indexOf(s);
+  return i > 0 ? (STEP_ORDER[i - 1] as StepKey) : null;
+}
+
+function nextStep(s: StepKey): StepKey | null {
+  const i = STEP_ORDER.indexOf(s);
+  return i < STEP_ORDER.length - 1 ? (STEP_ORDER[i + 1] as StepKey) : null;
+}
+
 export function FunnelStepper({ bootstrap }: FunnelStepperProps) {
   const router = useRouter();
   const [dto, setDto] = useState<SessionDTO>(bootstrap);
+  const [viewStep, setViewStep] = useState<StepKey>(bootstrap.currentStep);
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [fields, setFields] = useState<
@@ -73,6 +85,8 @@ export function FunnelStepper({ bootstrap }: FunnelStepperProps) {
       return;
     }
 
+    setDto(res.dto);
+
     if (stepKey === "activity") {
       const submitRes = await submitAssessment();
       setPending(false);
@@ -89,8 +103,17 @@ export function FunnelStepper({ bootstrap }: FunnelStepperProps) {
       return;
     }
 
-    setDto(res.dto);
+    const advance = nextStep(stepKey);
+    if (advance) setViewStep(advance);
     setPending(false);
+  }
+
+  function handleBack() {
+    if (pending) return;
+    setError(null);
+    setFields(undefined);
+    const prev = prevStep(viewStep);
+    if (prev) setViewStep(prev);
   }
 
   if (dto.submitted) {
@@ -98,43 +121,47 @@ export function FunnelStepper({ bootstrap }: FunnelStepperProps) {
     return null;
   }
 
-  const step = dto.currentStep;
+  const onBack = prevStep(viewStep) ? handleBack : undefined;
 
   return (
     <div className="space-y-8">
-      <ProgressBar currentStep={step} submitted={dto.submitted} />
+      <ProgressBar viewStep={viewStep} submitted={dto.submitted} />
 
-      {step === "gender" ? (
+      {viewStep === "gender" ? (
         <StepGender
           initial={dto.answers.gender ?? undefined}
           pending={pending}
           error={error}
           onSave={(b) => handleSave("gender", b)}
+          onBack={onBack}
         />
-      ) : step === "main_goal" ? (
+      ) : viewStep === "main_goal" ? (
         <StepMainGoal
           initial={dto.answers.mainGoal ?? undefined}
           pending={pending}
           error={error}
           onSave={(b) => handleSave("main_goal", b)}
+          onBack={onBack}
         />
-      ) : step === "age" ? (
+      ) : viewStep === "age" ? (
         <StepAge
           initial={dto.answers.ageYears}
           pending={pending}
           error={error}
           fieldError={pickFieldMessage(fields, "ageYears")}
           onSave={(b) => handleSave("age", b)}
+          onBack={onBack}
         />
-      ) : step === "height" ? (
+      ) : viewStep === "height" ? (
         <StepHeight
           initial={dto.answers.heightCm}
           pending={pending}
           error={error}
           fieldError={pickFieldMessage(fields, "heightCm")}
           onSave={(b) => handleSave("height", b)}
+          onBack={onBack}
         />
-      ) : step === "weight" ? (
+      ) : viewStep === "weight" ? (
         <StepWeight
           initialWeight={dto.answers.weightKg}
           initialTarget={dto.answers.targetWeightKg}
@@ -142,6 +169,7 @@ export function FunnelStepper({ bootstrap }: FunnelStepperProps) {
           error={error}
           fields={fields}
           onSave={(b) => handleSave("weight", b)}
+          onBack={onBack}
         />
       ) : (
         <StepActivity
@@ -149,6 +177,7 @@ export function FunnelStepper({ bootstrap }: FunnelStepperProps) {
           pending={pending}
           error={error}
           onSave={(b) => handleSave("activity", b)}
+          onBack={onBack}
         />
       )}
     </div>

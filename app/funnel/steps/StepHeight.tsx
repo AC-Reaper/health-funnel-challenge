@@ -10,6 +10,7 @@ interface StepHeightProps {
   error: string | null;
   fieldError?: string;
   onSave: (body: { heightCm: number }) => Promise<void>;
+  onBack?: () => void;
 }
 
 export function StepHeight({
@@ -18,6 +19,7 @@ export function StepHeight({
   error,
   fieldError,
   onSave,
+  onBack,
 }: StepHeightProps) {
   const [value, setValue] = useState<number | "">(initial ?? "");
   const canContinue = typeof value === "number" && value >= 120 && value <= 230;
@@ -29,6 +31,7 @@ export function StepHeight({
       error={error}
       canContinue={canContinue}
       onContinue={() => canContinue && onSave({ heightCm: value })}
+      onBack={onBack}
     >
       <NumberField
         id="heightCm"
