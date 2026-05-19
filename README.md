@@ -52,7 +52,7 @@ Day 1–5 features shipped + delivery-compliance hardening. Full funnel
 loop runs end-to-end against Supabase: anonymous session → 6-step
 browser quiz → submit → calculator → gated teaser → mock `/pay` → full
 result. 210 unit tests green; live cookie-jar smoke covers happy + sad
-paths for every endpoint; ten Codex reviews (000…009) Resolved.
+paths for every endpoint; eleven Codex reviews (000…010) Resolved.
 
 ## To be added (in implementation order)
 

@@ -2,9 +2,10 @@
 
 ## Status
 
-Open — awaiting Codex (optional; Owner may merge directly).
+Open — no Blocking findings. 1 Important and 1 Nice-to-have remain.
 
 Branch reviewed: `feature/delivery-compliance-hardening`.
+Head reviewed: `38f6911`.
 
 Scope (all small, scoped, no new dependencies):
 
@@ -49,15 +50,78 @@ Out of scope:
 - Frontend marketing visuals beyond the one trust line.
 
 Verification:
-- `npx tsc --noEmit` clean.
+- `npm run typecheck` clean.
 - `npm test` — 210 tests green.
-- `npm run build` clean (10 routes).
-- `npx prisma validate` clean (schema unchanged).
+- `npm run build` clean.
+- `npm run db:validate` clean.
+- `git diff --check main...HEAD` clean.
+- Live paid-session smoke against `https://project-u415a.vercel.app/`
+  passed with the README-style cookie jar flow: create session → six
+  steps → submit → pay → `GET /results/me` returns `kind="full"` with
+  `dailyCaloriesKcal`, `plan`, and `curvePoints` present. The smoke
+  produced a paid session row (`sessionId=ab45ea45-2d02-4e20-a816-23b9c8386a54`,
+  `paymentId=37cc17e6-f323-4054-99a5-2fe926f1b4f1`).
 
 ## Findings
 
-TBD — Codex to fill if review is requested.
+### Blocking
+
+None.
+
+### Important
+
+#### I001 — Delivery checklist still contains stale final-review state
+
+- **Impact range:** `docs/07-delivery-checklist.md` final submission gate,
+  plus the top-level completion story in `README.md`.
+- **Evidence:** `docs/07-delivery-checklist.md:19` says
+  `06-review-log.md` shows only reviews 001/002/003/006/007 as resolved
+  and `review-004-final` open. That contradicts the current review log:
+  `review-004-final`, `review-008-frontend-polish`, and
+  `review-009-security-hardening` are already `Resolved`, and this
+  branch now adds `review-010-delivery-compliance`. `README.md:55`
+  also still says "ten Codex reviews (000…009) Resolved", which will be
+  stale once review-010 is addressed and merged.
+- **Risk reason:** This is the final checklist the Owner is supposed to
+  trust before sending the challenge email. A stale "review-004 open"
+  line makes the submission look unfinished even though the actual
+  engineering state is much stronger.
+- **Suggested fix:** Rewrite the product/docs checklist row to a
+  durable statement such as "`06-review-log.md` is current through
+  `review-010-delivery-compliance`." Add `review-010` to the checklist
+  Review section after fixing this review. Refresh README status to
+  mention reviews `000…010` once review-010 is resolved.
+
+### Nice-to-have
+
+#### N001 — Error-model prose underdocuments `fields`
+
+- **Impact range:** `docs/04-api-design.md` error-model contract.
+- **Evidence:** `docs/04-api-design.md:90` says "`fields` is present
+  only on `VALIDATION_ERROR`", but current route handlers also attach
+  `fields` to `STEP_OUT_OF_ORDER` (`firstMissingStep`) and
+  `INCOMPLETE_ASSESSMENT` (`missingSteps`). The same doc later shows
+  those examples, so this is an internal contract mismatch rather than
+  an implementation bug.
+- **Risk reason:** API docs are one of the scoring surfaces. A reviewer
+  reading the top error model first may assume structured recovery data
+  is unavailable on the 409/422 workflow errors.
+- **Suggested fix:** Replace the bullet with something like:
+  "`fields` is present when the error has structured field context,
+  including `VALIDATION_ERROR`, `STEP_OUT_OF_ORDER`, and
+  `INCOMPLETE_ASSESSMENT`. Keys are camelCase request fields unless the
+  endpoint documents a meta key such as `firstMissingStep` or
+  `missingSteps`."
 
 ## Recommendations
 
-TBD — Codex to fill if review is requested.
+- The `/pay` submitted gate is correctly placed at the route boundary
+  and mirrored defensively in `lib/payment.ts`; the four new unit cases
+  cover the pure state machine risk.
+- The README paid-test recipe now satisfies the original "paid session"
+  requirement in the right shape for a cookie-auth design: it prints a
+  session id while keeping the signed cookie jar as the actual auth
+  credential. The live smoke confirms the recipe works on production.
+- No schema, API contract, or paywall-leak Blocking issue found in this
+  pass. Fix I001 before merge so the final submission docs do not carry
+  an avoidable contradiction.

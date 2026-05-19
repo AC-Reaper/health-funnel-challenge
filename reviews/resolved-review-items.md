@@ -834,3 +834,27 @@ Resolved in:
 Verification:
 README's submission table renders at the top of GitHub's repo view. The §Paid test session block is copy-pasteable against `$BASE`. Email template recipients match `docs/07 §Submission`. Subject template uses the actual 2026-05-20 date format.
 Status: Resolved 2026-05-20 on `feature/delivery-compliance-hardening`.
+
+## review-010 I001: delivery checklist + README carried stale review state
+
+Source: `reviews/review-010-delivery-compliance.md`
+
+Resolved in:
+- `docs/07-delivery-checklist.md` Product/docs row 5 — rewritten from "shows reviews-001/002/003/006/007 as Resolved and review-004-final open during final closeout" (v1 wording from earlier in the project) to a durable "06-review-log.md is current through review-010-delivery-compliance (reviews 000…010 all Resolved or Resolved-in-design/Closed-informed)".
+- `docs/07-delivery-checklist.md` Review section — added `[x] review-010-delivery-compliance.md Resolved` row.
+- `README.md` Status line — "ten Codex reviews (000…009) Resolved" → "eleven Codex reviews (000…010) Resolved".
+
+Verification:
+`grep -n "review-004-final.*open\|reviews-001/002/003/006/007\|ten Codex reviews" docs/07-delivery-checklist.md README.md` returns no matches inside live submission text.
+Status: Resolved 2026-05-20 on `feature/delivery-compliance-hardening`.
+
+## review-010 N001: docs/04 underdocumented when `fields` is present
+
+Source: `reviews/review-010-delivery-compliance.md`
+
+Resolved in:
+- `docs/04-api-design.md` §Error model — the `fields` bullet rewritten to enumerate every error code that carries `fields` today: `VALIDATION_ERROR` (per-field messages), `STEP_OUT_OF_ORDER` (`firstMissingStep`), `INCOMPLETE_ASSESSMENT` (`missingSteps`). Notes that endpoint sections below detail the exact shape for the non-`VALIDATION_ERROR` cases.
+
+Verification:
+The prose now matches the endpoint-section examples (e.g. `/sessions/me/steps/:stepKey` shows `firstMissingStep`, `/submit` shows `missingSteps`). No code change.
+Status: Resolved 2026-05-20 on `feature/delivery-compliance-hardening`.

@@ -87,8 +87,12 @@ All errors share one envelope, regardless of status code:
 ```
 
 - `code` is a stable machine-readable string from the table below.
-- `fields` is present only on `VALIDATION_ERROR`. Keys are camelCase request
-  fields.
+- `fields` is present when the error carries structured field context.
+  Today that covers `VALIDATION_ERROR` (per-field messages, keys are
+  camelCase request fields), `STEP_OUT_OF_ORDER` (`firstMissingStep`),
+  and `INCOMPLETE_ASSESSMENT` (`missingSteps`). Endpoint sections below
+  call out the exact shape of `fields` for each non-`VALIDATION_ERROR`
+  case.
 - `requestId` is echoed from / generated for every request for log
   correlation.
 - HTTP status follows HTTP semantics, never `200` with an error body.

@@ -16,8 +16,9 @@
 - [x] `04-api-design.md` matches the seven shipped endpoints + ADR-014
       cookie TTL
 - [x] `05-ai-collaboration-log.md` has substantive per-phase entries
-- [x] `06-review-log.md` shows reviews-001/002/003/006/007 as `Resolved`
-      and `review-004-final` open during final closeout
+- [x] `06-review-log.md` is current through
+      `review-010-delivery-compliance` (reviews 000…010 all
+      `Resolved` or `Resolved-in-design`/`Closed-informed`)
 
 Out of scope for this delivery (skipped intentionally, not forgotten):
 - `00-product-research.md` BetterMe observations write-up — not graded,
@@ -94,6 +95,8 @@ duplicate it.
       Nice-to-have findings remain; verified at `f2b37f8`)
 - [x] `review-008-frontend-polish.md` `Resolved` (verified at `c974fbb`)
 - [x] `review-009-security-hardening.md` `Resolved` (verified at `bcb4f2a`)
+- [x] `review-010-delivery-compliance.md` `Resolved` (post-fix at the
+      branch head; I001 + N001 closed before merge)
 - [x] `reviews/resolved-review-items.md` covers every adopted finding
 
 ## Submission (Owner)
