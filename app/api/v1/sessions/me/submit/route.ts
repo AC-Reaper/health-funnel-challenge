@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { cookies } from "next/headers";
 import { z } from "zod";
 
+import { withNoStore } from "@/lib/api/cache-control";
 import {
   ERROR_CODES,
   internalError,
@@ -156,13 +157,15 @@ function submitEnvelope(
   entitlementStatus: "free" | "paid",
   requestId: string,
 ): NextResponse {
-  return NextResponse.json(
-    {
-      sessionId,
-      submittedAt: submittedAt.toISOString(),
-      resultId,
-      entitlementStatus,
-    },
-    { headers: { "x-request-id": requestId } },
+  return withNoStore(
+    NextResponse.json(
+      {
+        sessionId,
+        submittedAt: submittedAt.toISOString(),
+        resultId,
+        entitlementStatus,
+      },
+      { headers: { "x-request-id": requestId } },
+    ),
   );
 }

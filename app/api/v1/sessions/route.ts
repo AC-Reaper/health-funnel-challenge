@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { cookies } from "next/headers";
 import { z } from "zod";
 
+import { withNoStore } from "@/lib/api/cache-control";
 import { internalError } from "@/lib/api/errors";
 import { parseJsonBody } from "@/lib/api/parse-body";
 import { getRequestId } from "@/lib/api/request-id";
@@ -42,12 +43,14 @@ export async function POST(req: Request) {
       const session = await findSessionById(existingSid);
       if (session) {
         const assessment = await findAssessmentBySessionId(session.id);
-        return NextResponse.json(serializeSession(session, assessment), {
-          headers: {
-            "x-request-id": requestId,
-            "set-cookie": buildSetCookieHeader(session.id),
-          },
-        });
+        return withNoStore(
+          NextResponse.json(serializeSession(session, assessment), {
+            headers: {
+              "x-request-id": requestId,
+              "set-cookie": buildSetCookieHeader(session.id),
+            },
+          }),
+        );
       }
     }
 
@@ -55,12 +58,14 @@ export async function POST(req: Request) {
       userAgent: req.headers.get("user-agent") ?? undefined,
     });
 
-    return NextResponse.json(serializeSession(session, null), {
-      headers: {
-        "x-request-id": requestId,
-        "set-cookie": buildSetCookieHeader(session.id),
-      },
-    });
+    return withNoStore(
+      NextResponse.json(serializeSession(session, null), {
+        headers: {
+          "x-request-id": requestId,
+          "set-cookie": buildSetCookieHeader(session.id),
+        },
+      }),
+    );
   } catch (err) {
     console.error(
       JSON.stringify({

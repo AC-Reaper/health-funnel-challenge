@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { cookies } from "next/headers";
 
+import { withNoStore } from "@/lib/api/cache-control";
 import {
   ERROR_CODES,
   internalError,
@@ -143,9 +144,10 @@ export async function PATCH(
         patch as Parameters<typeof persistStepPatch>[2],
       );
 
-    return NextResponse.json(
-      serializeSession(freshSession, freshAssessment),
-      { headers: { "x-request-id": requestId } },
+    return withNoStore(
+      NextResponse.json(serializeSession(freshSession, freshAssessment), {
+        headers: { "x-request-id": requestId },
+      }),
     );
   } catch (err) {
     console.error(
