@@ -39,15 +39,26 @@ export function PayButton({ priceLabel }: PayButtonProps) {
     }
   }
 
+  const isPending = status === "pending";
   return (
     <div className="mt-6">
       <button
         type="button"
         onClick={handlePay}
-        disabled={status === "pending"}
-        className="w-full rounded-md bg-ink-900 px-5 py-3 text-white font-semibold text-base shadow-sm transition hover:bg-brand-700 disabled:bg-ink-300 disabled:cursor-not-allowed"
+        disabled={isPending}
+        className="w-full inline-flex items-center justify-center gap-2 rounded-md bg-ink-900 px-5 py-3 text-white font-semibold text-base shadow-sm transition hover:bg-brand-700 disabled:bg-ink-300 disabled:cursor-not-allowed"
       >
-        {status === "pending" ? "Processing…" : `Pay ${priceLabel}`}
+        {isPending ? (
+          <>
+            <span
+              aria-hidden
+              className="inline-block h-4 w-4 animate-spin rounded-full border-2 border-white/40 border-t-white"
+            />
+            Processing…
+          </>
+        ) : (
+          <>Pay {priceLabel}</>
+        )}
       </button>
       {error ? (
         <p role="alert" className="mt-3 text-sm text-red-700">
