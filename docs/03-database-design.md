@@ -36,6 +36,7 @@ erDiagram
     SESSION ||--o| ASSESSMENT : "1:0..1"
     SESSION ||--o| RESULT     : "1:0..1"
     SESSION ||--o{ PAYMENT    : "1:0..n"
+    SESSION ||--o{ STEP_EVENT : "1:0..n"
 
     SESSION {
         uuid                id PK
@@ -83,7 +84,20 @@ erDiagram
         char_3         currency
         timestamptz    created_at
     }
+
+    STEP_EVENT {
+        uuid           id PK
+        uuid           session_id FK
+        step_key       step_key
+        jsonb          value_json
+        timestamptz    created_at
+    }
 ```
+
+Not visualised: the partial unique index `payment_one_success_per_session_idx`
+on `payment(session_id) WHERE status='succeeded'` (Prisma cannot model
+partial indexes, so it lives in `migration.sql` only). It backstops
+ADR-012's "exactly one successful payment per session" invariant.
 
 ## 3. Entities
 
@@ -170,6 +184,24 @@ constraint prevents accidental session deletes from erasing that audit
 data (it does **not** mean payment rows outlive a successful delete —
 the delete is blocked outright). CASCADE on `assessment` and `result`
 is fine because those are derived from the session.
+
+### `step_event`
+
+Append-only audit. One row per successful PATCH
+`/sessions/me/steps/:stepKey`. Written inside the same transaction as
+the assessment write so the audit can never disagree with the data
+(ADR-009, T-502).
+
+| Column | Type | Null | Default | Notes |
+| - | - | - | - | - |
+| `id` | `uuid` | no | `gen_random_uuid()` | |
+| `session_id` | `uuid` | no | — | FK → `session.id`. **CASCADE** on delete. |
+| `step_key` | `step_key` | no | — | Which step the user just answered. |
+| `value_json` | `jsonb` | no | — | Parsed Zod body verbatim (e.g. `{"gender":"female"}`, `{"weightKg":80,"targetWeightKg":70}`). |
+| `created_at` | `timestamptz` | no | `now()` | |
+
+Index: `(session_id, created_at)` btree. No unique constraint — replays
+write additional rows so the audit reflects the user's input cadence.
 
 ## 4. Enums
 
