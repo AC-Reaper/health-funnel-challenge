@@ -33,15 +33,16 @@ export const dynamic = "force-dynamic";
 
 export async function PATCH(
   req: Request,
-  { params }: { params: { stepKey: string } },
+  { params }: { params: Promise<{ stepKey: string }> },
 ) {
+  const resolvedParams = await params;
   const requestId = getRequestId(req);
 
   const originCheck = checkSameOrigin(req, requestId);
   if (!originCheck.ok) return originCheck.res;
 
   try {
-    const sid = verifyCookie(cookies().get(COOKIE_NAME)?.value);
+    const sid = verifyCookie((await cookies()).get(COOKIE_NAME)?.value);
     if (!sid) return noSession(requestId);
 
     const session = await findSessionById(sid);
@@ -56,7 +57,7 @@ export async function PATCH(
       });
     }
 
-    const { stepKey } = params;
+    const { stepKey } = resolvedParams;
     if (!isStepKey(stepKey)) {
       return jsonError({
         status: 400,
@@ -150,7 +151,7 @@ export async function PATCH(
     console.error(
       JSON.stringify({
         level: "error",
-        msg: `PATCH /api/v1/sessions/me/steps/${params.stepKey} failed`,
+        msg: `PATCH /api/v1/sessions/me/steps/${resolvedParams.stepKey} failed`,
         requestId,
         err: err instanceof Error ? err.message : String(err),
       }),

@@ -17,7 +17,7 @@ export async function GET(req: Request) {
   const requestId = getRequestId(req);
 
   try {
-    const sid = verifyCookie(cookies().get(COOKIE_NAME)?.value);
+    const sid = verifyCookie((await cookies()).get(COOKIE_NAME)?.value);
     if (!sid) return noSession(requestId);
 
     const session = await findSessionById(sid);

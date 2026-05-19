@@ -35,7 +35,7 @@ export async function POST(req: Request) {
     const parsed = await parseJsonBody(req, PostSessionsBody, requestId);
     if (!parsed.ok) return parsed.res;
 
-    const raw = cookies().get(COOKIE_NAME)?.value;
+    const raw = (await cookies()).get(COOKIE_NAME)?.value;
     const existingSid = verifyCookie(raw);
 
     if (existingSid) {

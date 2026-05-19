@@ -14,7 +14,7 @@ import { FunnelStepper } from "./FunnelStepper";
 export const dynamic = "force-dynamic";
 
 export default async function FunnelPage() {
-  const sid = verifyCookie(cookies().get(COOKIE_NAME)?.value);
+  const sid = verifyCookie((await cookies()).get(COOKIE_NAME)?.value);
   if (!sid) redirect("/");
 
   const session = await findSessionById(sid);
