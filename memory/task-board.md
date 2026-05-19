@@ -28,7 +28,7 @@ see Done column.)
 
 ## In Progress
 
-(None.)
+- T-506 — Claude → Codex — `feature/security-hardening` shipped same-origin guard (`lib/api/same-origin.ts`), Idempotency-Key printable-ASCII (`lib/api/idempotency-key.ts`), `docs/08-security-hardening.md`, and 18 new vitest cases (184 → 202). `reviews/review-009-security-hardening.md` placeholder is in place. Awaiting Codex review-009.
 
 ## Review
 
