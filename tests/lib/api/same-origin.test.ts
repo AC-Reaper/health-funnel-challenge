@@ -83,4 +83,50 @@ describe("checkSameOrigin", () => {
     const out = checkSameOrigin(req, "req_test_7");
     expect(out.ok).toBe(true);
   });
+
+  // review-009 N001: scheme check, conditional on x-forwarded-proto.
+  it("rejects scheme mismatch when x-forwarded-proto is present", async () => {
+    const req = makeReq({
+      host: "app.example.com",
+      "x-forwarded-proto": "https",
+      origin: "http://app.example.com",
+    });
+    const out = checkSameOrigin(req, "req_test_8");
+    expect(out.ok).toBe(false);
+    if (out.ok) return;
+    expect(out.res.status).toBe(403);
+    const body = (await out.res.json()) as { error: { code: string } };
+    expect(body.error.code).toBe("FORBIDDEN_ORIGIN");
+  });
+
+  it("passes scheme + host match when x-forwarded-proto is present", () => {
+    const req = makeReq({
+      host: "app.example.com",
+      "x-forwarded-proto": "https",
+      origin: "https://app.example.com",
+    });
+    const out = checkSameOrigin(req, "req_test_9");
+    expect(out.ok).toBe(true);
+  });
+
+  it("uses the left-most entry of a comma-separated x-forwarded-proto chain", () => {
+    const req = makeReq({
+      host: "app.example.com",
+      "x-forwarded-proto": "https, http",
+      origin: "https://app.example.com",
+    });
+    const out = checkSameOrigin(req, "req_test_10");
+    expect(out.ok).toBe(true);
+  });
+
+  it("falls back to host-only when x-forwarded-proto is absent (cURL / local dev)", () => {
+    // Without a forwarded-proto, the receiving scheme is unknowable. We
+    // accept either to keep the README cookie-jar walkthrough working.
+    const req = makeReq({
+      host: "app.example.com",
+      origin: "http://app.example.com",
+    });
+    const out = checkSameOrigin(req, "req_test_11");
+    expect(out.ok).toBe(true);
+  });
 });

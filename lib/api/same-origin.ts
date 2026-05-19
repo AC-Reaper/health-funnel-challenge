@@ -5,18 +5,28 @@ import { ERROR_CODES, jsonError } from "./errors";
 /**
  * Same-origin guard for state-changing routes.
  *
- * - **No `Origin` header → pass.** Origin is browser-set; cURL,
- *   server-side Node `fetch`, and other non-browser clients omit it.
- *   The README cookie-jar walkthrough relies on this carve-out.
- *   Cross-site browser requests are still bounded by the
- *   `SameSite=Lax` cookie attribute (see `lib/session.ts`).
- * - **`Origin: null` → reject.** Sent from sandboxed iframes /
- *   `data:` URLs / opaque origins. We never expect this.
- * - **Malformed `Origin` (not a URL) → reject.**
- * - **Hostname mismatch vs receiving host → reject.** Comparison uses
- *   `x-forwarded-host` first (Vercel proxy) then `host`. Case-insensitive.
+ * Comparison surface:
+ * - **Host**: `URL(origin).host` vs `x-forwarded-host` (Vercel proxy)
+ *   or `host`. Case-insensitive.
+ * - **Scheme**: `URL(origin).protocol` vs the receiving scheme,
+ *   derived from `x-forwarded-proto` when present (Vercel terminates
+ *   TLS upstream so `req.url` shows `http://`). When `x-forwarded-proto`
+ *   is **absent**, we cannot reliably know the receiving scheme
+ *   (cURL, local dev), so the check falls back to host-only — a
+ *   documented trade-off for the cURL cookie-jar walkthrough.
  *
- * Rejection envelope is `403 FORBIDDEN_ORIGIN`.
+ * Acceptance / rejection rules:
+ * - No `Origin` header → pass. Origin is browser-set; cURL,
+ *   server-side Node `fetch`, and other non-browser clients omit it.
+ *   `SameSite=Lax` already bounds the browser cross-site case for
+ *   cookie-bearing requests.
+ * - `Origin: null` (sandboxed iframes, `data:` URLs, opaque origins)
+ *   → 403.
+ * - Malformed `Origin` (not a URL) → 403.
+ * - Host mismatch → 403.
+ * - Scheme mismatch (only when `x-forwarded-proto` is set) → 403.
+ *
+ * Rejection envelope: `403 FORBIDDEN_ORIGIN` (see `lib/api/errors.ts`).
  */
 export function checkSameOrigin(
   req: Request,
@@ -28,8 +38,11 @@ export function checkSameOrigin(
   if (origin === "null") return { ok: false, res: forbid(requestId) };
 
   let originHost: string;
+  let originScheme: string;
   try {
-    originHost = new URL(origin).host;
+    const parsed = new URL(origin);
+    originHost = parsed.host;
+    originScheme = parsed.protocol.replace(/:$/, "").toLowerCase();
   } catch {
     return { ok: false, res: forbid(requestId) };
   }
@@ -41,6 +54,21 @@ export function checkSameOrigin(
   if (originHost.toLowerCase() !== host.toLowerCase()) {
     return { ok: false, res: forbid(requestId) };
   }
+
+  // Scheme check, only when the receiving scheme can be known.
+  // `x-forwarded-proto` can be a comma-separated list (proxy chain);
+  // take the left-most entry, which is the original client scheme.
+  const forwardedProto = req.headers.get("x-forwarded-proto");
+  if (forwardedProto) {
+    const expectedScheme = forwardedProto
+      .split(",")[0]
+      ?.trim()
+      .toLowerCase();
+    if (expectedScheme && originScheme !== expectedScheme) {
+      return { ok: false, res: forbid(requestId) };
+    }
+  }
+
   return { ok: true };
 }
 

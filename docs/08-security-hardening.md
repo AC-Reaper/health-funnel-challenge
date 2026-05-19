@@ -42,8 +42,8 @@ state-changing.
 | `/pay` already-paid new-key silent no-op | `lib/payment.ts:decidePaymentAction` (ADR-012) | `tests/lib/payment.test.ts` ("already-paid + NEW key → silent no-op") + DB partial unique index `payment_one_success_per_session_idx` |
 | `/pay` SELECT … FOR UPDATE per-session serialization | `lib/payment.ts:processPayment` | Live cookie-jar smoke + payment-table row-count assertions |
 | `step_event` audit row written inside the same PATCH transaction | `lib/step-repo.ts:runStepsTransaction` (ADR-009, T-502) | `tests/lib/step-repo.test.ts` (success path + rollback path) |
-| Parameterized SQL only — no raw user input concatenation | All DB calls go through Prisma; the **only** raw query is `db.$queryRaw\`SELECT 1\`` (pooler warm-up, no parameters) | `grep -nR "\$queryRaw\|\$executeRaw" .` returns one warm-up only |
-| Same-origin guard on mutating routes | `lib/api/same-origin.ts` (this branch) | `tests/lib/api/same-origin.test.ts` (7 cases) |
+| Parameterized SQL — no raw user input concatenation | All DB writes go through Prisma's query-builder (parameterized by construction). Two `$queryRaw` callsites exist, both using Prisma's **tagged template** form which parameterizes `${...}` placeholders into the prepared statement — never string-concatenated. (1) `lib/db.ts` pooler warm-up `SELECT 1` (no parameters at all). (2) `lib/payment.ts:183` per-session row lock for `/pay`: `tx.$queryRaw\`SELECT id FROM "session" WHERE id = ${sessionId}::uuid FOR UPDATE\`` — `sessionId` comes from the verified cookie (`lib/session.ts:verifyCookie`), and Prisma's tagged-template handler still parameterizes it. | Reproducer: `rg -n '\$queryRaw\|\$executeRaw' --glob '!node_modules' --glob '!package-lock.json'` returns exactly these two sites; inspect each to confirm `${...}` interpolations are bound parameters, not string concatenation. |
+| Same-origin guard on mutating routes (host + conditional scheme) | `lib/api/same-origin.ts` (this branch). Host comparison is always enforced; scheme comparison is enforced when `x-forwarded-proto` is present (Vercel sets it), and falls back to host-only when absent (cURL / local dev). Rejection envelope is `403 FORBIDDEN_ORIGIN`. | `tests/lib/api/same-origin.test.ts` (11 cases incl. scheme mismatch, forwarded-proto chain, fallback) |
 | `Idempotency-Key` restricted to printable ASCII | `lib/api/idempotency-key.ts` (this branch) | `tests/lib/api/idempotency-key.test.ts` (11 cases) |
 
 ## 3. Test proof table
@@ -73,9 +73,10 @@ a committed regression. No "verified in design only" rows.
 | `/pay` Idempotency-Key with control char → 400 | `tests/lib/api/idempotency-key.test.ts` | rejects `\n`, `\0`, `\t`, non-ASCII |
 | `/pay` same-key replay | `tests/lib/payment.test.ts` | same `paymentId` on second call; one DB row |
 | `/pay` already-paid + new key → silent no-op | `tests/lib/payment.test.ts` + DB partial unique index | same `paymentId`; never inserts a second succeeded row |
-| Cross-origin browser POST | `tests/lib/api/same-origin.test.ts` | 403 FORBIDDEN_ORIGIN on host mismatch |
+| Cross-origin browser POST (host mismatch) | `tests/lib/api/same-origin.test.ts` | 403 FORBIDDEN_ORIGIN on host mismatch |
+| Cross-scheme POST (http origin against TLS-terminated host) | `tests/lib/api/same-origin.test.ts` | 403 FORBIDDEN_ORIGIN when `x-forwarded-proto` is present and `URL(origin).protocol` differs |
 | `Origin: null` / malformed | `tests/lib/api/same-origin.test.ts` | rejected |
-| SQL injection via body | No raw SQL with user input. All writes go through Prisma's generated parameterized queries. The only `$queryRaw` is a parameter-less `SELECT 1` warm-up. | `grep` reproducer in §2 above |
+| SQL injection via body | All DB writes go through Prisma's parameterized query-builder. The two `$queryRaw` callsites use Prisma's tagged-template form (parameterized): `lib/db.ts` warm-up `SELECT 1` (no params); `lib/payment.ts:183` per-session lock `SELECT id FROM "session" WHERE id = ${sessionId}::uuid FOR UPDATE` (sessionId is bound, not concatenated; the value comes from `verifyCookie`, not the request body). | `rg -n '\$queryRaw\|\$executeRaw' --glob '!node_modules' --glob '!package-lock.json'` returns exactly the two sites above; the §2 row walks through each. |
 
 ## 4. Day-5 / post-MVP additions changelog
 

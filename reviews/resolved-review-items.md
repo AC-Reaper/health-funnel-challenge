@@ -779,3 +779,29 @@ Resolved in:
 Verification:
 Each auto-advance step now tracks a `wasPendingRef` and, in a `useEffect` keyed on `pending`, clears `selecting` whenever `pending` transitions `true → false`. This covers the failure paths Codex flagged: a 422 / 5xx / coherence rejection where the parent sets `pending=false` and `error=msg` without unmounting the step — the user can immediately re-click another option. The transition guard (not a bare `!pending`) keeps the 250ms timer-only window from prematurely resetting `selecting` before `onSave` is even invoked. Activity step also covers the chained `/submit` failure path. Manual smoke: trigger a 5xx on `gender` PATCH (e.g. via DevTools network throttling + offline) → error renders inline → options are clickable again without refresh. Codex re-reviewed `c974fbb` on 2026-05-19: `npm run typecheck`, `npm test` (184 tests), `npm run build`, and `npm run db:validate` pass; Preview smoke on `https://project-u415a-doh7rtyig-jackz1.vercel.app/` passes the auto-advance → teaser → pay → full-result path.
 Status: Resolved 2026-05-19 on `feature/frontend-polish` at `c974fbb`.
+
+## review-009 I001: docs/08 SQL-injection proof contradicted the actual `$queryRaw` surface
+
+Source: `reviews/review-009-security-hardening.md`
+
+Resolved in:
+- `docs/08-security-hardening.md` §2 "Parameterized SQL" row
+- `docs/08-security-hardening.md` §3 "SQL injection via body" row
+
+Verification:
+The §2 row now lists both `$queryRaw` callsites — `lib/db.ts` warm-up (no parameters) and `lib/payment.ts:183` per-session lock — and explains that the lock uses Prisma's **tagged-template** form so `${sessionId}` is bound as a prepared-statement parameter, not string-concatenated. The §3 row mirrors the same proof and points to the §2 row's reproducer. The grep command is updated to the actual `rg` invocation that returns exactly these two sites. The code is unchanged (it was always safe); only the doc is now factually accurate.
+Status: Resolved 2026-05-19 on `feature/security-hardening`.
+
+## review-009 N001: same-origin guard was host-only; scheme mismatch was untested
+
+Source: `reviews/review-009-security-hardening.md`
+
+Resolved in:
+- `lib/api/same-origin.ts` — host comparison unchanged; scheme comparison added, conditional on `x-forwarded-proto` (takes the left-most entry of a comma-separated chain). Falls back to host-only when `x-forwarded-proto` is absent (cURL / local dev) so the README cookie-jar walkthrough still works.
+- `tests/lib/api/same-origin.test.ts` — 4 new cases: scheme mismatch with `x-forwarded-proto: https` → 403; matching scheme+host → ok; comma-separated forwarded-proto chain takes left-most entry; no `x-forwarded-proto` → host-only fallback passes mismatched scheme.
+- `docs/04-api-design.md` Authentication section — updated to describe both host and conditional scheme checks.
+- `docs/08-security-hardening.md` §2 + §3 — updated to describe the full host + scheme guard and add a "Cross-scheme POST" row to the test-proof table.
+
+Verification:
+`npm test` reports 202 → 206. `tsc --noEmit` + `next build` clean. The fallback-to-host-only branch is explicit and tested, so the cURL cookie-jar walkthrough remains green.
+Status: Resolved 2026-05-19 on `feature/security-hardening`.

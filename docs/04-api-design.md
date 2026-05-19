@@ -53,11 +53,15 @@
 - **Same-origin guard** (`lib/api/same-origin.ts`): every mutating route
   (POST /sessions, PATCH /steps/:stepKey, POST /submit, POST /pay) runs
   `checkSameOrigin` before any cookie read. If the request carries an
-  `Origin` header, its host must match the receiving host
-  (`x-forwarded-host` is honoured for Vercel's proxy). Mismatch returns
-  `403 FORBIDDEN_ORIGIN`. Requests with no `Origin` pass through — this
-  carve-out keeps the README cookie-jar walkthrough and server-internal
-  Node fetch working. See `docs/08-security-hardening.md` §2.
+  `Origin` header, both its **host** and its **scheme** are compared
+  to the receiving end: host vs `x-forwarded-host ?? host`,
+  case-insensitive; scheme vs `x-forwarded-proto` when present (the
+  left-most entry of the comma-separated chain). When
+  `x-forwarded-proto` is absent (cURL, local dev), the scheme check
+  falls back to host-only. Mismatch returns `403 FORBIDDEN_ORIGIN`.
+  Requests with no `Origin` pass through — this carve-out keeps the
+  README cookie-jar walkthrough and server-internal Node fetch
+  working. See `docs/08-security-hardening.md` §2.
 
 ## Versioning
 

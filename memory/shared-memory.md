@@ -3,9 +3,9 @@
 ## Current Project
 
 Health quiz funnel full-stack challenge for Ruiqi Technology (睿迄科技).
-5-day delivery. MVP is merged to `main`; post-MVP frontend polish is
-review-resolved on `feature/frontend-polish` at `c974fbb`. ADR-001…014 are
-Accepted.
+5-day delivery. MVP is merged to `main`; post-MVP security hardening is
+under Codex review on `feature/security-hardening` at `d6e4c66`. ADR-001…014
+are Accepted.
 
 ## Final Goal
 
@@ -88,16 +88,17 @@ payment.
 - Test suite → `tests/**` (vitest, 184 tests)
 - ADR log → `memory/decisions.md` (ADR-001…014 Accepted)
 - Open questions → `memory/open-questions.md` (no open blocker)
-- Latest reviews → `reviews/review-008-frontend-polish.md` (Resolved at `c974fbb`); `reviews/review-004-final.md` (Resolved at `f2b37f8`); `reviews/review-007-browser-smoke.md` (Resolved); `reviews/review-006-day3.md` (Resolved); `reviews/review-002-api.md` and `reviews/review-003-db.md` are resolved for earlier branches.
+- Latest reviews → `reviews/review-009-security-hardening.md` (Open: no Blocking, 1 Important docs-proof mismatch, 1 Nice-to-have same-origin precision issue); `reviews/review-008-frontend-polish.md` (Resolved at `c974fbb`); `reviews/review-004-final.md` (Resolved at `f2b37f8`); `reviews/review-007-browser-smoke.md` (Resolved); `reviews/review-006-day3.md` (Resolved); `reviews/review-002-api.md` and `reviews/review-003-db.md` are resolved for earlier branches.
 
 ## Current Branch
 
-`feature/frontend-polish` — post-MVP UI-only branch. Ships single-choice
-auto-advance with 250ms confirm flash, client-only `viewStep` editing,
-`LockedPreview`, report-style full results, and pay-page polish. Codex
-re-reviewed `c974fbb` on 2026-05-19: `typecheck`, 184 tests, build,
-`db:validate`, and Preview smoke pass. review-008 I001 is resolved; no open
-findings remain before merge.
+`feature/security-hardening` — post-MVP security branch. Ships
+`lib/api/same-origin.ts`, `lib/api/idempotency-key.ts`,
+`docs/08-security-hardening.md`, and 18 new tests (202 total). Codex reviewed
+`d6e4c66` on 2026-05-19: `typecheck`, 202 tests, build, `db:validate`,
+diff-check, and Preview security smoke pass. review-009 is Open with one
+Important docs-proof mismatch in `docs/08` and one Nice-to-have around
+same-origin scheme precision.
 
 ## Code Management
 
