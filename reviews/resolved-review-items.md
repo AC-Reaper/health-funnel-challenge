@@ -805,3 +805,32 @@ Resolved in:
 Verification:
 `npm test` reports 202 → 206. `tsc --noEmit` + `next build` clean. The fallback-to-host-only branch is explicit and tested, so the cURL cookie-jar walkthrough remains green.
 Status: Resolved 2026-05-19 on `feature/security-hardening`.
+
+## review-010 P1: /pay accepted draft sessions and minted payments before /submit
+
+Source: `feature/delivery-compliance-hardening` (Owner-flagged P1 before requesting review-010)
+
+Resolved in:
+- `app/api/v1/pay/route.ts` — inserts a `409 NOT_SUBMITTED` envelope immediately after `findSessionById` when `session.status !== "submitted"`.
+- `lib/payment.ts:decidePaymentAction` — signature extended to `Pick<Session, "status" | "entitlementStatus">`; new `{ type: "not_submitted" }` action returned on draft.
+- `lib/payment.ts:runPaymentTransaction` — switches on `not_submitted` and throws defensively, so the orchestrator cannot mint a payment row against an unsubmitted session even if the route gate regresses.
+- `tests/lib/payment.test.ts` — 4 existing pure cases refreshed with `status: "submitted"`; 3 new pure cases under "session not submitted" (draft+free+no row, draft+free+existing row, draft+paid impossible state); 1 new `runPaymentTransaction` defensive throw test.
+
+Verification:
+`npm test` reports 206 → 210. `tsc --noEmit` + `npm run build` clean. Before the fix, a draft session with a valid HMAC cookie could POST `/pay`, mint a payment row, and flip `entitlement_status` to `paid` even though no `result` existed (`/results/me` still returned 409 NOT_SUBMITTED so the leak surface was bounded, but the payment-vs-session state diverged). After the fix the route returns 409 NOT_SUBMITTED with `message: "Submit the assessment before payment."`, matching the browser `/pay` page's pre-existing 409 gate via `GET /results/me`.
+Status: Resolved 2026-05-20 on `feature/delivery-compliance-hardening`.
+
+## review-010 P0: delivery-compliance README + docs + checklist drift
+
+Source: `feature/delivery-compliance-hardening` (Owner-flagged P0 set)
+
+Resolved in:
+- `README.md` — top "Submission info" table (demo URL, GitHub URL, 4 doc links); new §Paid test session with cURL recipe + auth-model note; appended "Submission email template"; test count 181 → 210; branches table refreshed.
+- `docs/03-database-design.md` — new §2.1 Logical model mapping (User / Subscription / Payment → shipped representation, with ADR citations).
+- `docs/04-api-design.md` — `/pay` endpoint section gains 403 FORBIDDEN_ORIGIN and 409 NOT_SUBMITTED rows; error-model table NOT_SUBMITTED row clarified.
+- `docs/07-delivery-checklist.md` — review-009 flipped to [x]; test count 202 → 210; Security subsection rows added for /pay gate + logical model mapping; Submission rows expanded with concrete URLs + email-template pointer + subject pattern.
+- `app/results/page.tsx` — one-line "no real charge" footer on the full branch only.
+
+Verification:
+README's submission table renders at the top of GitHub's repo view. The §Paid test session block is copy-pasteable against `$BASE`. Email template recipients match `docs/07 §Submission`. Subject template uses the actual 2026-05-20 date format.
+Status: Resolved 2026-05-20 on `feature/delivery-compliance-hardening`.

@@ -48,18 +48,24 @@ Out of scope for this delivery (skipped intentionally, not forgotten):
       `tests/lib/validation/assessment.test.ts`,
       `tests/lib/health/calculator.test.ts`)
 - [x] No `any` without justification; `tsc --noEmit` clean
-- [x] 202 vitest tests green
+- [x] 210 vitest tests green
 
 ### Security
 
-- [x] Same-origin guard on every mutating route
-      (`lib/api/same-origin.ts`, 7 cases in
-      `tests/lib/api/same-origin.test.ts`)
+- [x] Same-origin guard on every mutating route — host + conditional
+      scheme via `x-forwarded-proto` (`lib/api/same-origin.ts`, 11
+      cases in `tests/lib/api/same-origin.test.ts`)
 - [x] `Idempotency-Key` restricted to 1-128 printable-ASCII chars
       (`lib/api/idempotency-key.ts`, 11 cases in
       `tests/lib/api/idempotency-key.test.ts`)
+- [x] `/pay` rejects pre-`/submit` with `409 NOT_SUBMITTED` at both
+      the API boundary (`app/api/v1/pay/route.ts`) and the state
+      machine (`lib/payment.ts:decidePaymentAction` returns
+      `not_submitted`); 4 cases in `tests/lib/payment.test.ts`
 - [x] Security review at `docs/08-security-hardening.md` with attack
       surface, control evidence table, and out-of-scope rationale
+- [x] Logical model mapping (User / Subscription / Payment) in
+      `docs/03-database-design.md` §2.1
 
 ## Deploy / demo
 
@@ -87,15 +93,16 @@ duplicate it.
 - [x] `review-004-final.md` `Resolved` (no Blocking, Important, or
       Nice-to-have findings remain; verified at `f2b37f8`)
 - [x] `review-008-frontend-polish.md` `Resolved` (verified at `c974fbb`)
-- [ ] `review-009-security-hardening.md` `Resolved` (awaits Codex on
-      `feature/security-hardening`)
+- [x] `review-009-security-hardening.md` `Resolved` (verified at `bcb4f2a`)
 - [x] `reviews/resolved-review-items.md` covers every adopted finding
 
 ## Submission (Owner)
 
-- [ ] Public demo URL is live and warm
-- [ ] GitHub repo is accessible to the email recipients
-- [ ] DB schema diagram included in the email or repo root
+- [ ] Public demo URL is live and warm (https://project-u415a.vercel.app/)
+- [ ] GitHub repo is accessible to the email recipients (`AC-Reaper/health-funnel-challenge`, public)
+- [ ] DB schema diagram included in the email or repo root (Mermaid in `docs/03-database-design.md` §2)
 - [ ] Email sent to `yitengruntu12123@gmail.com`,
-      `alex@arkon-tech.com`, `rip@arkon-tech.com`
-- [ ] Subject line follows `【姓名】_全栈挑战_YYYYMMDD`
+      `alex@arkon-tech.com`, `rip@arkon-tech.com` — copy-paste body
+      from the **Submission email template** at the bottom of
+      `README.md`
+- [ ] Subject line follows `【姓名】_全栈挑战_20260520`

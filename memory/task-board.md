@@ -28,7 +28,7 @@ see Done column.)
 
 ## In Progress
 
-(None.)
+- T-507 — Claude → Codex (optional) — `feature/delivery-compliance-hardening` ships the /pay submitted gate (409 NOT_SUBMITTED at API + state machine), README submission block + paid-test cURL + email template, docs/03 §2.1 Logical model mapping, docs/04 error-row updates, /results full trust footer, docs/07 final flip. 206 → 210 tests green; `tsc --noEmit` + `next build` clean. Owner to decide whether to request a short Codex review-010 or merge directly.
 
 ## Review
 
