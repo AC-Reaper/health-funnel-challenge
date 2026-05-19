@@ -14,10 +14,8 @@ import {
   checkWeightCoherence,
   firstMissingPrereq,
   projectAssessment,
-  upsertAssessmentField,
 } from "@/lib/assessment";
-import { db } from "@/lib/db";
-import { STEP_ORDER, computeCurrentStep } from "@/lib/progress";
+import { STEP_ORDER } from "@/lib/progress";
 import {
   COOKIE_NAME,
   findAssessmentBySessionId,
@@ -25,9 +23,9 @@ import {
   serializeSession,
   verifyCookie,
 } from "@/lib/session";
+import { persistStepPatch } from "@/lib/step-repo";
 import { STEP_SCHEMAS, isStepKey } from "@/lib/validation/steps";
 
-import type { Prisma } from "@prisma/client";
 import type { z } from "zod";
 
 export const dynamic = "force-dynamic";
@@ -128,38 +126,17 @@ export async function PATCH(
       }
     }
 
-    // review-002 I006: assessment upsert + session.current_step update
-    // commit as one transaction. Prisma @updatedAt on `session` refreshes
-    // session.updated_at via the .update call, so the cached column and
-    // the timestamp stay in sync with the assessment write.
-    //
-    // T-502 / ADR-009: append a `step_event` audit row inside the same
-    // transaction so the audit can never disagree with the assessment.
-    const { freshSession, freshAssessment } = await db.$transaction(
-      async (tx) => {
-        const updatedAssessment = await upsertAssessmentField(
-          sid,
-          stepKey,
-          patch as Parameters<typeof upsertAssessmentField>[2],
-          tx,
-        );
-        const updatedSession = await tx.session.update({
-          where: { id: sid },
-          data: { currentStep: computeCurrentStep(updatedAssessment) },
-        });
-        await tx.stepEvent.create({
-          data: {
-            sessionId: sid,
-            stepKey,
-            valueJson: patch as Prisma.InputJsonValue,
-          },
-        });
-        return {
-          freshSession: updatedSession,
-          freshAssessment: updatedAssessment,
-        };
-      },
-    );
+    // review-002 I006 + T-502 / ADR-009 + review-004-final N001:
+    // assessment upsert + session.current_step refresh + step_event
+    // audit write commit as one transaction. The pure orchestrator
+    // lives in `lib/step-repo.ts` with a `StepsTxOps` seam so the
+    // state machine is unit-tested without Supabase.
+    const { session: freshSession, assessment: freshAssessment } =
+      await persistStepPatch(
+        sid,
+        stepKey,
+        patch as Parameters<typeof persistStepPatch>[2],
+      );
 
     return NextResponse.json(
       serializeSession(freshSession, freshAssessment),
