@@ -4,7 +4,9 @@
 
 Open — 2026-05-19
 
-Branch reviewed: `feature/security-hardening` at `d6e4c66`
+Branch reviewed: `feature/security-hardening`
+- Initial review: `d6e4c66`
+- Re-review: `adafa91`
 
 Preview reviewed:
 - `https://project-u415a-nvhyy1s1z-jackz1.vercel.app/`
@@ -24,6 +26,14 @@ Verification run:
 - `npm run build` — pass
 - `npm run db:validate` — pass
 - `git diff --check` — pass
+
+Re-review verification at `adafa91`:
+- `npm run typecheck` — pass
+- `npm test` — pass, 206 tests
+- `npm run build` — pass
+- `npm run db:validate` — pass
+- `git diff --check` — pass
+- `rg -n '\$queryRaw|\$executeRaw' app lib prisma tests --glob '!node_modules' --glob '!package-lock.json'` — returns one application/test callsite: `lib/payment.ts:183`
 
 Preview smoke:
 - `GET /api/v1/healthz` on the Preview URL returns `200`.
@@ -47,9 +57,10 @@ browser-origin mutation and header/log hygiene around `Idempotency-Key`.
 The helper tests are focused, and all four mutating routes now call
 `checkSameOrigin` before reading cookies or parsing body-specific state.
 
-I found no Blocking code issue. The branch should not be merged as-is because
-the new security document contains a false SQL-proof claim that is easy for
-an evaluator to reproduce.
+I found no Blocking code issue. At `adafa91`, N001 is resolved by the
+scheme-aware forwarded-proto check and new tests. I001 is improved but still
+open: the SQL proof now correctly names the `/pay` raw lock query, but it
+also claims a `lib/db.ts` warm-up `$queryRaw` callsite that no longer exists.
 
 ## Blocking
 
@@ -57,37 +68,40 @@ None.
 
 ## Important
 
-### I001 — `docs/08` SQL-injection proof table contradicts the actual repo
+### I001 — Still open: `docs/08` SQL-injection proof table still contradicts the actual repo
 
 - Impact range: `docs/08-security-hardening.md` §2 and §3, the security
-  evidence trail, and the interview-facing claim that every security control
-  is falsifiable from the repo.
-- Risk reason: The doc says the only raw query is
-  `db.$queryRaw\`SELECT 1\`` and that the grep command returns one warm-up
-  query only. That is not true in the current codebase. `rg -n
-  "queryRaw|executeRaw" . -g '!node_modules' -g '!package-lock.json'`
-  finds the real payment lock query at `lib/payment.ts:183`:
-  `tx.$queryRaw` with `SELECT id FROM "session" WHERE id =
-  ${sessionId}::uuid FOR UPDATE`. The code is still safe because Prisma's
-  tagged template parameterizes `${sessionId}`, but the doc's proof is
-  factually wrong. A reviewer following the citation will see the mismatch
-  immediately and may discount the otherwise-good security writeup.
-- Suggested fix: Rewrite the SQL-injection rows in `docs/08` to cite the
-  actual raw query. The proof should say that all raw SQL goes through
-  Prisma tagged templates, the only raw SQL in app code is the
-  parameterized `/pay` `SELECT ... FOR UPDATE`, and there is no string
-  concatenation of user input. Update the grep reproducer accordingly. No
-  application code change is required.
+  evidence trail, `reviews/resolved-review-items.md`, and the
+  interview-facing claim that every security control is falsifiable from the
+  repo.
+- Risk reason: `adafa91` fixes the original omission of the `/pay`
+  `SELECT ... FOR UPDATE`, but the doc now says there are two `$queryRaw`
+  callsites: `(1) lib/db.ts pooler warm-up SELECT 1` and `(2)
+  lib/payment.ts:183`. The first one is not present in the current repo:
+  `lib/db.ts` only creates the Prisma client, and `rg -n
+  '\$queryRaw|\$executeRaw' app lib prisma tests --glob '!node_modules'
+  --glob '!package-lock.json'` returns only `lib/payment.ts:183`. The code
+  remains safe, but the evidence table is still not reproducible as written.
+  `reviews/resolved-review-items.md` repeats the same "two callsites" claim,
+  so the resolution log currently overstates the fix as well.
+- Suggested fix: Rewrite the SQL-injection proof to match the actual repo:
+  application/test code has exactly one raw SQL callsite,
+  `lib/payment.ts:183`, and it uses Prisma's tagged-template form with
+  `${sessionId}` bound as a prepared-statement parameter. Remove the
+  nonexistent `lib/db.ts` warm-up claim from `docs/08` and from
+  `reviews/resolved-review-items.md`, or add a real warm-up call only if the
+  app actually needs it. The better fix is docs-only.
 
 References:
-- `docs/08-security-hardening.md:43`
 - `docs/08-security-hardening.md:45`
 - `docs/08-security-hardening.md:78`
+- `reviews/resolved-review-items.md:792`
 - `lib/payment.ts:183`
+- `lib/db.ts:11`
 
 ## Nice-to-have
 
-### N001 — Same-origin helper is really host-only; scheme mismatch is untested
+### N001 — Resolved: same-origin helper is scheme-aware when `x-forwarded-proto` is present
 
 - Impact range: `lib/api/same-origin.ts`, `tests/lib/api/same-origin.test.ts`,
   `docs/04-api-design.md`, and `docs/08-security-hardening.md`.
@@ -102,16 +116,23 @@ References:
   (`x-forwarded-proto` / `req.url` fallback) and add a scheme-mismatch test,
   or deliberately rename the wording in docs to "same-host origin guard" so
   the control does not overstate what it enforces.
+- Resolution: `adafa91` adds scheme comparison when `x-forwarded-proto` is
+  present, keeps the no-header host-only fallback documented for cURL/local
+  dev, and adds four tests covering scheme mismatch, scheme match,
+  comma-separated forwarded-proto chains, and fallback behavior. The docs now
+  describe the conditional scheme behavior instead of implying an unqualified
+  full-origin check.
 
 References:
-- `lib/api/same-origin.ts:30`
-- `lib/api/same-origin.ts:37`
-- `tests/lib/api/same-origin.test.ts:19`
+- `lib/api/same-origin.ts:40`
+- `lib/api/same-origin.ts:61`
+- `tests/lib/api/same-origin.test.ts:88`
 - `docs/04-api-design.md:53`
 - `docs/08-security-hardening.md:46`
 
 ## Recommendation
 
-Fix I001 before merging. N001 can be fixed now because it is small, or left
-as an explicitly accepted follow-up if the owner wants to keep this pass
-strictly documentation-only after I001.
+Fix the remaining I001 docs-proof mismatch before merging. Once `docs/08`
+and `reviews/resolved-review-items.md` describe the actual raw SQL surface,
+this branch should be safe to merge from the security-hardening review
+perspective.

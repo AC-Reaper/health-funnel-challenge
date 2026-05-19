@@ -789,8 +789,8 @@ Resolved in:
 - `docs/08-security-hardening.md` §3 "SQL injection via body" row
 
 Verification:
-The §2 row now lists both `$queryRaw` callsites — `lib/db.ts` warm-up (no parameters) and `lib/payment.ts:183` per-session lock — and explains that the lock uses Prisma's **tagged-template** form so `${sessionId}` is bound as a prepared-statement parameter, not string-concatenated. The §3 row mirrors the same proof and points to the §2 row's reproducer. The grep command is updated to the actual `rg` invocation that returns exactly these two sites. The code is unchanged (it was always safe); only the doc is now factually accurate.
-Status: Resolved 2026-05-19 on `feature/security-hardening`.
+The §2 row now says there is **exactly one** `$queryRaw` callsite in app / lib / prisma / tests — `lib/payment.ts:183`, the ADR-006 per-session lock — and explains that it uses Prisma's **tagged-template** form so `${sessionId}` is bound as a prepared-statement parameter, not string-concatenated. The `sessionId` value comes from `verifyCookie`, not the request body. The §3 row mirrors the same proof and points to the §2 row. The reproducer is the actual `rg -n '\$queryRaw\|\$executeRaw' app lib prisma tests --glob '!node_modules' --glob '!package-lock.json'` invocation, which returns exactly that one site. The code is unchanged (it was always safe); only the doc is now factually accurate. (My first attempt also claimed a nonexistent `lib/db.ts` `SELECT 1` warm-up alongside the lock; the review-009 re-review caught the mistake. The current entry reflects the real surface.)
+Status: Resolved 2026-05-19 on `feature/security-hardening` (after the review-009 re-review correction).
 
 ## review-009 N001: same-origin guard was host-only; scheme mismatch was untested
 
