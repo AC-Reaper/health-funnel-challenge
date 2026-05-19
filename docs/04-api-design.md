@@ -1,8 +1,11 @@
 # API Design
 
-> Status: **Draft v1** — Claude 2026-05-18. Mirrors `docs/02-architecture.md`
-> v2 and accepted ADR-001…013. Awaiting implementation and Codex
-> `review-002-api.md`.
+> Status: **Current** — Claude 2026-05-18, last updated 2026-05-19
+> against `feature/day5-hardening` after review-004-final I002. Mirrors
+> `docs/02-architecture.md` v2 + ADR-001…014. The seven routes below
+> are all implemented, smoked, and reviewed; review-001/002/003/006/007
+> are Resolved. The auth section reflects ADR-014's server-side cookie
+> TTL.
 
 ## Overview
 
@@ -22,14 +25,27 @@
 
 - Identity = anonymous session, carried by a **signed httpOnly cookie**
   named `hfc_session`.
-- The cookie is set by `POST /api/v1/sessions`. It contains
-  `{ sid: <uuid>, sig: <hmac-sha256(sid, SESSION_COOKIE_SECRET)> }`,
-  base64url-encoded.
-- Flags: `HttpOnly`, `Secure` (prod), `SameSite=Lax`, `Path=/`, `Max-Age =
-  60 * 60 * 24 * 30` (30 days).
-- Every gated endpoint runs `lib/session.resolveCookie(req)`. Missing or
-  bad-signature cookie → `401 NO_SESSION`. Cookie that points to a deleted
-  session id → also `401 NO_SESSION` (treat as missing; do not auto-create).
+- The cookie is set by `POST /api/v1/sessions`. Its base64url-encoded
+  payload is `{ sid: <uuid>, iat: <unix-seconds>, sig: <hex> }` where
+  `sig = HMAC-SHA256(\`${sid}.${iat}\`, SESSION_COOKIE_SECRET)` — both
+  `sid` and `iat` are covered by the signature so neither can be
+  tampered without invalidating it.
+- Set-Cookie flags: `HttpOnly`, `Secure` (prod), `SameSite=Lax`,
+  `Path=/`, `Max-Age = 60 * 60 * 24 * 30` (30 days).
+- **Server-side TTL** (ADR-014, T-501): in addition to the client
+  `Max-Age`, `verifyCookie` enforces server-side that
+  `now - iat < 30 days` with a 60-second clock-skew tolerance. A
+  captured cookie value cannot be replayed past TTL. `verifyCookie`
+  returns `null` (which routes translate to `401 NO_SESSION`) for any
+  of: missing/garbled base64url, malformed JSON, missing `sid`/`iat`/
+  `sig`, non-integer `iat`, future-dated `iat` (forged), expired
+  `iat`, wrong-length `sig`, or `timingSafeEqual` HMAC mismatch.
+- Every gated route handler calls
+  `verifyCookie(cookies().get(COOKIE_NAME)?.value)` (defined in
+  `lib/session.ts`). If it returns `null`, the route returns `401
+  NO_SESSION` using the standard error envelope. A cookie that signs
+  cleanly but points to a deleted session id also returns `401
+  NO_SESSION` (treat as missing; do not auto-create).
 - No `Authorization` header. No CSRF tokens needed because all state-changing
   endpoints require the signed httpOnly cookie that browsers don't expose to
   JS, **and** SameSite=Lax blocks cross-site POSTs. Same-origin only for the
@@ -409,5 +425,7 @@ curl -sS -c $JAR -b $JAR -X POST "$BASE/api/v1/pay" \
 curl -sS -c $JAR -b $JAR "$BASE/api/v1/results/me" | jq
 ```
 
-A Postman collection (`docs/postman-collection.json`, Day 4) mirrors this
-flow with the same cookie jar semantics.
+The same flow is reproduced in the `README.md` "Demo path" block against
+the deployed URL. A Postman collection was scoped out of the final
+deliverable; the cURL cookie-jar walkthrough is the canonical
+reproducer.
