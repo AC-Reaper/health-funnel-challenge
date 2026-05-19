@@ -12,7 +12,7 @@
 >
 > **Decision gate**: ADR-001…014 in `memory/decisions.md` are Accepted.
 
-## 0. Accepted decisions (ADR-001…013)
+## 0. Accepted decisions (ADR-001…014)
 
 The accepted decisions that frame this architecture live in
 `memory/decisions.md`. Short index — see ADR bodies for context,
@@ -46,7 +46,7 @@ rationale, and consequences:
 3. Server-side computation on submit: BMI + category (WHO bands), daily calorie target (Mifflin–St Jeor × activity factor), realistic target-weight date (bounded weekly delta).
 4. Result page that is **server-gated**: free users see teaser (BMI + category + one-sentence narrative), paid users see full result (calories, target date, weight curve points).
 5. Mock payment: a browser route `/pay` and a mock API `POST /api/v1/pay`. One transaction writes a `payment` row + sets `session.entitlement_status = 'paid'`; subsequent `GET /api/v1/results/me` returns the full payload.
-6. Public Vercel URL + README with: 60-second setup, env vars, full cURL cookie-jar walkthrough (create → save steps → submit → teaser → pay → full), and a Postman collection mirroring it.
+6. Public Vercel URL + README with: setup, env vars, and a full cURL cookie-jar walkthrough (create → save steps → submit → teaser → pay → full). A separate Postman collection was scoped out — the cURL walkthrough is the canonical reproducer (see §9).
 
 **Out of scope** — see §9.
 
@@ -141,7 +141,7 @@ Four required tables, one optional. Exact Prisma schema lives in `docs/03-databa
 **`result`** — immutable snapshot per submitted session.
 - `id uuid pk`
 - `session_id uuid unique fk → session.id`
-- `bmi decimal(4,2)`
+- `bmi decimal(5,2)` (widened per review-003 B001; the API-admitted boundary `heightCm=120, weightKg=250` yields BMI ≈ 173.61, which overflows a narrower type)
 - `bmi_category enum('underweight','normal','overweight','obese_i','obese_ii','obese_iii')`
 - `daily_calories_kcal int`
 - `predicted_target_date date nullable` (null when goal is unrealistic; see §calculator)
@@ -153,10 +153,10 @@ Four required tables, one optional. Exact Prisma schema lives in `docs/03-databa
 **`payment`** — one row for the first successful mock payment idempotency key. Same-key replays select the existing row; already-paid new-key calls no-op without inserting a second row.
 - `id uuid pk`
 - `session_id uuid fk → session.id`
-- `idempotency_key text`
+- `idempotency_key varchar(128)` (width pinned by the API contract cap; review-003 I003)
 - `status enum('succeeded','failed')`
 - `amount_cents int` (server constant for the demo)
-- `currency text` (server constant)
+- `currency char(3)` (ISO-4217 fixed-width; review-003 I003)
 - `created_at timestamp`
 - `UNIQUE (session_id, idempotency_key)`
 
@@ -227,7 +227,7 @@ The calculator is fixture-tested across the boundary set the validation layer ad
 
 Each day ends at a Codex review trigger so quality is loaded throughout, not bolted on Day 5.
 
-**Day 1 — Foundations** *(unblocked: ADR-001…013 accepted)*
+**Day 1 — Foundations** *(historical note: started 2026-05-18 against the ADRs accepted at that time; ADR-014 was added on Day 5)*
 - T-101 `package.json` + Next.js 14 App Router skeleton.
 - T-102 Prisma init + Supabase project provisioned.
 - T-103 `docs/03-database-design.md` + first migration (`session`, `assessment`, `result`, `payment`).
@@ -295,11 +295,14 @@ Each day ends at a Codex review trigger so quality is loaded throughout, not bol
 | GraphQL / tRPC | Brief evaluates REST path/method design. Adding either would obscure that signal. |
 | Pre-seeded paid `sessionId` | Cookie-only auth makes a raw UUID unusable from outside the browser; replaced with a cURL cookie-jar walkthrough in the README. |
 | UUIDv7 | No measurable benefit at this scale; using `crypto.randomUUID()` instead. |
+| Postman collection | The README cURL cookie-jar walkthrough is the canonical reproducer; a Postman collection would duplicate it without adding evaluator value. |
 
 ---
 
 ## 10. Open follow-ups
 
-- `docs/03-database-design.md` — flesh out Prisma schema, ER diagram, enum lists, index rationale (Day 1).
-- `docs/04-api-design.md` — complete request/response/error contracts (written this turn).
-- `memory/open-questions.md` — Q-001…Q-006 are resolved; no open blocker for Day 1.
+None for the submitted MVP. `docs/03-database-design.md` and
+`docs/04-api-design.md` are current as of 2026-05-19;
+`memory/open-questions.md` Q-001…Q-006 are all resolved. The only
+remaining tasks before submission are owner actions in
+`docs/07-delivery-checklist.md` §Submission.

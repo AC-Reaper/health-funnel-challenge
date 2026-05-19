@@ -707,11 +707,12 @@ Source: `reviews/review-004-final.md`
 
 Resolved in:
 - `docs/03-database-design.md` (5-table overview + step_event entry + Day-5 migration in runbook + sanity check `\dt` lists five tables)
-- `docs/02-architecture.md` (header status flips to v2-current with ADR-014 note; ADR index gains ADR-014; §3 step_event reworded as shipped; §3 index notes; §7 Day-4 + Day-5 ✅; §8/§9 cleanup)
+- `docs/02-architecture.md` first pass (header status flips to v2-current with ADR-014 note; ADR index gains ADR-014; §3 step_event reworded as shipped; §3 index notes; §7 Day-4 + Day-5 ✅; §8/§9 cleanup)
+- `docs/02-architecture.md` follow-up (review-004 re-review I004): §0 heading reads ADR-001…014; §3 schema bullets aligned with `prisma/schema.prisma` (`result.bmi decimal(5,2)`, `payment.idempotency_key varchar(128)`, `payment.currency char(3)`)
 
 Verification:
-`grep -n "four tables\|step_event.*defer\|step_event.*may ship\|step_event (optional" docs/02-architecture.md docs/03-database-design.md` returns no matches. ADR-009 reads as Accepted-and-shipped throughout; ADR-014 listed alongside it.
-Status: Resolved 2026-05-19 on `feature/day5-hardening`.
+`grep -n "four tables\|step_event.*defer\|step_event.*may ship\|step_event (optional\|ADR-001…013\|decimal(4,2)\|idempotency_key text\|currency text" docs/02-architecture.md docs/03-database-design.md` returns no matches inside live submission text. ADR-009 reads as Accepted-and-shipped throughout; ADR-014 listed alongside it.
+Status: Resolved 2026-05-19 on `feature/day5-hardening` (after the review-004 re-review I004 sweep).
 
 ## review-004-final I002: API/auth doc stale after the cookie TTL change
 
@@ -731,10 +732,11 @@ Source: `reviews/review-004-final.md`
 Resolved in:
 - `README.md` (ADR-001…013 → ADR-001…014; Day-3 row drops "awaits Codex re-review"; "Planned branches" list replaced with shipped-branch table including review file + merge commit)
 - `docs/07-delivery-checklist.md` (rewritten: removes the never-owned `00-product-research.md` / `01-requirements.md` / Postman / `npm run lint` rows with explicit "out of scope" notes; every shipped engineering / deploy / docs / review row marked ✅ with artefact path; review-004-final remains the only open review row)
+- `docs/02-architecture.md` follow-up (review-004 re-review I004): §1 MVP-scope row 6 no longer promises a Postman collection; new "Postman collection" row added to §9 "deliberately not doing"; §10 "Open follow-ups" rewritten as "None for the submitted MVP"; Day-1 historical note clarified to flag that ADR-014 was added on Day 5.
 
 Verification:
-`grep -n "ADR-001…013\|awaits Codex re-review of review-006\|feature/init-docs\|feature/pay-subscription\|feature/docs-delivery\|npm run lint\|Postman collection" README.md docs/07-delivery-checklist.md docs/04-api-design.md` returns no matches inside live submission text (only in commit-message-style historical entries elsewhere).
-Status: Resolved 2026-05-19 on `feature/day5-hardening`.
+`grep -n "Postman collection mirroring it\|Postman collection mirrors\|flesh out Prisma schema\|complete request/response/error contracts" docs/02-architecture.md docs/04-api-design.md README.md docs/07-delivery-checklist.md` returns no matches.
+Status: Resolved 2026-05-19 on `feature/day5-hardening` (after the review-004 re-review I004 sweep).
 
 ## review-004-final N001: `step_event` write had no committed regression proof
 
@@ -747,4 +749,20 @@ Resolved in:
 
 Verification:
 `npm test` reports 181 → 184. Same SubmitTxOps / PaymentTxOps pattern as review-006 B001; production call graph is byte-identical with the in-memory fakes — only the ops implementation differs.
+Status: Resolved 2026-05-19 on `feature/day5-hardening`.
+
+## review-004-final re-review I004: docs/02-architecture.md still had final-submission and schema drift
+
+Source: `reviews/review-004-final.md` Re-review section
+
+Resolved in:
+- `docs/02-architecture.md` §0 heading (`ADR-001…013` → `ADR-001…014`)
+- `docs/02-architecture.md` §1 MVP scope (Postman line reworded to "scoped out — cURL walkthrough is canonical")
+- `docs/02-architecture.md` §3 schema bullets aligned with `prisma/schema.prisma`: `result.bmi decimal(5,2)`, `payment.idempotency_key varchar(128)`, `payment.currency char(3)`
+- `docs/02-architecture.md` §7 Day-1 historical note rewritten to flag ADR-014 was added on Day 5
+- `docs/02-architecture.md` §9 "deliberately not doing" gains an explicit Postman row
+- `docs/02-architecture.md` §10 "Open follow-ups" replaced with "None for the submitted MVP"
+
+Verification:
+`grep -nE "ADR-001…013|Postman collection (mirroring|mirrors)|decimal\(4,2\)|idempotency_key text|currency text|flesh out Prisma schema|complete request/response/error contracts" docs/02-architecture.md` returns no matches inside live submission text. Re-review marked I001 / I003 as fully resolved alongside this fix.
 Status: Resolved 2026-05-19 on `feature/day5-hardening`.

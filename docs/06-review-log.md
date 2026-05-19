@@ -21,7 +21,7 @@
 | review-001-architecture | Architecture | Resolved-in-design | Codex re-reviewed v2; Blocking architecture findings are resolved in design. Implementation verification remains pending. |
 | review-002-api | API | Resolved | Re-reviewed `feature/funnel-persistence-api` at `36f8830`: step API has no open Blocking/Important findings; I007 route tests accepted as partial with pure tests + live smoke. Day-3 submit/result/pay API still pending future review. |
 | review-003-db | Database | Resolved | Re-reviewed `feature/db-schema` on 2026-05-18. Original 1 Blocking + 4 Important are resolved; 1 docs-only Nice-to-have remains. |
-| review-004-final | Final | Pending | Triggers Day 5 after T-501. |
+| review-004-final | Final | Open | Re-reviewed `feature/day5-hardening` at `495b7ed`: typecheck, 184 tests, db:validate, and build pass. I002 and N001 resolved; I001/I003 mostly fixed, but one Important `docs/02-architecture.md` final-doc drift remains. |
 | review-005-governance-scaffold | Governance scaffold | Resolved-in-design | No Blocking findings. Claude addressed I001/I002/I003/I005/N001/N002; Codex recorded Owner decisions for Q-002/Q-003/Q-006 and resolved I004 in design. |
 | review-006-day3 | Day-3 submit/result/pay | Resolved | Re-reviewed `feature/assessment-result-api` at `7b17949`: B001/I001/I002/N001/N002 resolved; N003 deferred to Day-4 browser UX. No open Blocking/Important findings. |
 | review-007-browser-smoke | Deployed browser smoke | Resolved | Production URL `https://project-u415a.vercel.app/` passes browser smoke: no-cookie `/pay` redirects to `/`, quiz → teaser → `/pay` → full result works. Preview protection issue also resolved. Day 4 is fully closed from review perspective. |
