@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { z } from "zod";
 
-import { parseJsonBody } from "@/lib/api/parse-body";
+import { MAX_BODY_BYTES, parseJsonBody } from "@/lib/api/parse-body";
 
 const schema = z
   .object({ name: z.string().min(1), age: z.number().int().min(0) })
@@ -70,6 +70,48 @@ describe("parseJsonBody", () => {
     expect(result.ok).toBe(false);
     if (result.ok) return;
     expect(result.res.status).toBe(422);
+  });
+
+  it("rejects with 413 when Content-Length declares a body over the cap", async () => {
+    const oversized = "x".repeat(MAX_BODY_BYTES + 1);
+    const req = new Request("http://localhost/api/v1/test", {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        "content-length": String(oversized.length + 100),
+      },
+      body: JSON.stringify({ name: "a", age: 1 }),
+    });
+    const result = await parseJsonBody(req, schema, REQUEST_ID);
+    expect(result.ok).toBe(false);
+    if (result.ok) return;
+    expect(result.res.status).toBe(413);
+    const body = await result.res.json();
+    expect(body.error.code).toBe("PAYLOAD_TOO_LARGE");
+  });
+
+  it("rejects with 413 when the actual body exceeds the cap (no Content-Length)", async () => {
+    const filler = "x".repeat(MAX_BODY_BYTES + 100);
+    const oversized = JSON.stringify({ name: filler, age: 1 });
+    const req = new Request("http://localhost/api/v1/test", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: oversized,
+    });
+    const result = await parseJsonBody(req, schema, REQUEST_ID);
+    expect(result.ok).toBe(false);
+    if (result.ok) return;
+    expect(result.res.status).toBe(413);
+    const body = await result.res.json();
+    expect(body.error.code).toBe("PAYLOAD_TOO_LARGE");
+  });
+
+  it("accepts bodies just under the cap", async () => {
+    // Build a JSON body that fits within MAX_BODY_BYTES end-to-end.
+    const padding = "y".repeat(MAX_BODY_BYTES - 64);
+    const req = jsonReq(JSON.stringify({ name: padding, age: 1 }));
+    const result = await parseJsonBody(req, schema, REQUEST_ID);
+    expect(result.ok).toBe(true);
   });
 
   it("returns typed parsed data on success", async () => {
