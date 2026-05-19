@@ -107,13 +107,29 @@ export function buildSetCookieHeader(sid: string): string {
 
 // ---------- Repository (I/O) ----------
 
+/**
+ * Cap on the User-Agent string we persist into `session.user_agent`.
+ * The column is `text`, so without a cap an attacker could write a
+ * very long UA into our row. We use this field only for diagnostics
+ * (correlating bug reports with browsers) — 512 chars is well past
+ * any real-world UA and below any DB row-size concern.
+ */
+export const USER_AGENT_MAX_LENGTH = 512;
+
+export function truncateUserAgent(
+  ua: string | null | undefined,
+): string | null {
+  if (!ua) return null;
+  return ua.slice(0, USER_AGENT_MAX_LENGTH);
+}
+
 export async function createSession(params: {
   userAgent?: string;
 }): Promise<Session> {
   return db.session.create({
     data: {
       id: randomUUID(),
-      userAgent: params.userAgent ?? null,
+      userAgent: truncateUserAgent(params.userAgent),
     },
   });
 }
