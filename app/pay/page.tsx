@@ -89,13 +89,20 @@ export default async function PayPage() {
 
         <ul className="mt-6 space-y-2 text-sm text-ink-700">
           <li className="flex gap-2">
-            <span className="text-brand-700">✓</span> Daily calorie target
+            <span className="text-brand-700">✓</span>{" "}
+            <span><strong className="font-semibold">Daily calorie target</strong> tuned to your activity and goal</span>
           </li>
           <li className="flex gap-2">
-            <span className="text-brand-700">✓</span> 12-week projected curve
+            <span className="text-brand-700">✓</span>{" "}
+            <span><strong className="font-semibold">Predicted finish date</strong> at a safe weekly pace</span>
           </li>
           <li className="flex gap-2">
-            <span className="text-brand-700">✓</span> Realistic finish date
+            <span className="text-brand-700">✓</span>{" "}
+            <span><strong className="font-semibold">Weekly weight curve</strong> with 12+ data points</span>
+          </li>
+          <li className="flex gap-2">
+            <span className="text-brand-700">✓</span>{" "}
+            <span>Plan summary + algorithm version on the receipt</span>
           </li>
         </ul>
 

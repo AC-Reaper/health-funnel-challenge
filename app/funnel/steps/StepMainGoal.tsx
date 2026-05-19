@@ -1,12 +1,14 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 import type { SessionAnswersDTO } from "@/lib/session";
 
 import { OptionCard, StepShell } from "./StepShell";
 
 type MainGoal = NonNullable<SessionAnswersDTO["mainGoal"]>;
+
+const AUTO_ADVANCE_MS = 250;
 
 const OPTIONS: { value: MainGoal; label: string; description: string }[] = [
   { value: "lose_weight", label: "Lose weight", description: "~0.5 kg / week deficit" },
@@ -20,24 +22,59 @@ interface StepMainGoalProps {
   pending: boolean;
   error: string | null;
   onSave: (body: { mainGoal: MainGoal }) => Promise<void>;
+  onBack?: () => void;
 }
 
-export function StepMainGoal({ initial, pending, error, onSave }: StepMainGoalProps) {
+export function StepMainGoal({
+  initial,
+  pending,
+  error,
+  onSave,
+  onBack,
+}: StepMainGoalProps) {
   const [value, setValue] = useState<MainGoal | undefined>(initial);
+  const [selecting, setSelecting] = useState<MainGoal | null>(null);
+  const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const wasPendingRef = useRef(pending);
+
+  useEffect(() => {
+    return () => {
+      if (timerRef.current) clearTimeout(timerRef.current);
+    };
+  }, []);
+
+  // review-008 I001: clear `selecting` on a pending true→false transition
+  // so failed PATCHes don't leave the step disabled. See StepGender.
+  useEffect(() => {
+    if (wasPendingRef.current && !pending) setSelecting(null);
+    wasPendingRef.current = pending;
+  }, [pending]);
+
+  function pick(v: MainGoal) {
+    if (pending || selecting) return;
+    setValue(v);
+    setSelecting(v);
+    timerRef.current = setTimeout(() => {
+      void onSave({ mainGoal: v });
+    }, AUTO_ADVANCE_MS);
+  }
 
   return (
     <StepShell
       title="What's your main goal?"
       pending={pending}
       error={error}
-      canContinue={value !== undefined}
-      onContinue={() => value && onSave({ mainGoal: value })}
+      canContinue={false}
+      autoAdvance
+      onBack={onBack}
     >
       {OPTIONS.map((o) => (
         <OptionCard
           key={o.value}
           selected={value === o.value}
-          onSelect={() => setValue(o.value)}
+          selecting={selecting === o.value}
+          disabled={pending || selecting !== null}
+          onSelect={() => pick(o.value)}
           label={o.label}
           description={o.description}
         />

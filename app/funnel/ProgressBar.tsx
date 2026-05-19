@@ -5,7 +5,7 @@ import type { StepKey } from "@prisma/client";
 import { STEP_ORDER } from "@/lib/progress";
 
 interface ProgressBarProps {
-  currentStep: StepKey;
+  viewStep: StepKey;
   submitted: boolean;
 }
 
@@ -18,19 +18,19 @@ const STEP_LABELS: Record<StepKey, string> = {
   activity: "Activity",
 };
 
-export function ProgressBar({ currentStep, submitted }: ProgressBarProps) {
+export function ProgressBar({ viewStep, submitted }: ProgressBarProps) {
   const total = STEP_ORDER.length;
-  const idx = STEP_ORDER.indexOf(currentStep);
-  const completed = submitted ? total : Math.max(0, idx);
-  const pct = Math.round(((submitted ? total : idx + 1) / total) * 100);
+  const idx = STEP_ORDER.indexOf(viewStep);
+  const displayIndex = submitted ? total : idx + 1;
+  const pct = Math.round((displayIndex / total) * 100);
 
   return (
     <div className="w-full">
       <div className="flex items-center justify-between text-xs text-ink-500 mb-2">
         <span>
-          Step {submitted ? total : idx + 1} of {total}
+          Step {displayIndex} of {total}
         </span>
-        <span>{submitted ? "Done" : STEP_LABELS[currentStep]}</span>
+        <span>{submitted ? "Done" : STEP_LABELS[viewStep]}</span>
       </div>
       <div
         role="progressbar"
@@ -45,21 +45,27 @@ export function ProgressBar({ currentStep, submitted }: ProgressBarProps) {
         />
       </div>
       <ol className="mt-3 flex gap-1 text-[10px] text-ink-500">
-        {STEP_ORDER.map((s, i) => (
-          <li
-            key={s}
-            className={
-              "flex-1 text-center " +
-              (i < completed
-                ? "text-brand-700 font-medium"
-                : i === idx && !submitted
-                  ? "text-ink-900 font-medium"
-                  : "")
-            }
-          >
-            {STEP_LABELS[s]}
-          </li>
-        ))}
+        {STEP_ORDER.map((s, i) => {
+          const isPast = submitted || i < idx;
+          const isCurrent = !submitted && i === idx;
+          return (
+            <li
+              key={s}
+              className={
+                "flex-1 text-center truncate " +
+                (isPast
+                  ? "text-brand-700 font-medium"
+                  : isCurrent
+                    ? "text-ink-900 font-medium"
+                    : "")
+              }
+              title={STEP_LABELS[s]}
+            >
+              {isPast ? "✓ " : ""}
+              {STEP_LABELS[s]}
+            </li>
+          );
+        })}
       </ol>
     </div>
   );

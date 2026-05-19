@@ -3,8 +3,9 @@
 ## Current Project
 
 Health quiz funnel full-stack challenge for Ruiqi Technology (睿迄科技).
-5-day delivery. Day 5 hardening passed final Codex re-review on
-`feature/day5-hardening` at `f2b37f8`; ADR-001…014 are Accepted.
+5-day delivery. MVP is merged to `main`; post-MVP frontend polish is
+review-resolved on `feature/frontend-polish` at `c974fbb`. ADR-001…014 are
+Accepted.
 
 ## Final Goal
 
@@ -87,17 +88,16 @@ payment.
 - Test suite → `tests/**` (vitest, 184 tests)
 - ADR log → `memory/decisions.md` (ADR-001…014 Accepted)
 - Open questions → `memory/open-questions.md` (no open blocker)
-- Latest reviews → `reviews/review-004-final.md` (Resolved at `f2b37f8`: no Blocking, Important, or Nice-to-have findings remain); `reviews/review-007-browser-smoke.md` (Resolved); `reviews/review-006-day3.md` (Resolved); `reviews/review-002-api.md` and `reviews/review-003-db.md` are resolved for earlier branches.
+- Latest reviews → `reviews/review-008-frontend-polish.md` (Resolved at `c974fbb`); `reviews/review-004-final.md` (Resolved at `f2b37f8`); `reviews/review-007-browser-smoke.md` (Resolved); `reviews/review-006-day3.md` (Resolved); `reviews/review-002-api.md` and `reviews/review-003-db.md` are resolved for earlier branches.
 
 ## Current Branch
 
-`feature/day5-hardening` — Day-5 closeout branch with server-side cookie
-TTL (`iat` + 30d expiry), minimal `step_event` audit table + PATCH
-transaction write, schema diagram refresh, AI collaboration log, and final
-review closeout. Codex final re-reviewed `f2b37f8` on 2026-05-19:
-`npm run typecheck`, `npm test` (184), `npm run db:validate`, and
-`npm run build` pass. All review-004 findings are resolved; branch is
-ready to merge to `main` from the reviewer perspective.
+`feature/frontend-polish` — post-MVP UI-only branch. Ships single-choice
+auto-advance with 250ms confirm flash, client-only `viewStep` editing,
+`LockedPreview`, report-style full results, and pay-page polish. Codex
+re-reviewed `c974fbb` on 2026-05-19: `typecheck`, 184 tests, build,
+`db:validate`, and Preview smoke pass. review-008 I001 is resolved; no open
+findings remain before merge.
 
 ## Code Management
 

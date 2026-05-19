@@ -8,8 +8,10 @@ interface StepShellProps {
   error?: string | null;
   pending: boolean;
   canContinue: boolean;
-  onContinue: () => void;
+  onContinue?: () => void;
+  onBack?: () => void;
   continueLabel?: string;
+  autoAdvance?: boolean;
   children: ReactNode;
 }
 
@@ -20,17 +22,34 @@ export function StepShell({
   pending,
   canContinue,
   onContinue,
+  onBack,
   continueLabel = "Continue",
+  autoAdvance = false,
   children,
 }: StepShellProps) {
   return (
     <form
       onSubmit={(e) => {
         e.preventDefault();
-        if (!pending && canContinue) onContinue();
+        if (!autoAdvance && onContinue && !pending && canContinue) onContinue();
       }}
       className="space-y-6"
     >
+      <div className="flex items-center justify-between min-h-[1.5rem]">
+        {onBack ? (
+          <button
+            type="button"
+            onClick={onBack}
+            disabled={pending}
+            className="text-sm text-ink-500 hover:text-ink-900 disabled:opacity-50 disabled:cursor-not-allowed transition"
+          >
+            ← Back
+          </button>
+        ) : (
+          <span />
+        )}
+      </div>
+
       <header className="space-y-1">
         <h2 className="text-2xl font-semibold text-ink-900">{title}</h2>
         {hint ? <p className="text-sm text-ink-500">{hint}</p> : null}
@@ -47,19 +66,23 @@ export function StepShell({
         </p>
       ) : null}
 
-      <button
-        type="submit"
-        disabled={pending || !canContinue}
-        className="w-full rounded-md bg-ink-900 px-4 py-3 text-white font-medium text-base shadow-sm transition hover:bg-brand-700 disabled:bg-ink-300 disabled:cursor-not-allowed"
-      >
-        {pending ? "Saving…" : continueLabel}
-      </button>
+      {autoAdvance ? null : (
+        <button
+          type="submit"
+          disabled={pending || !canContinue}
+          className="w-full rounded-md bg-ink-900 px-4 py-3 text-white font-medium text-base shadow-sm transition hover:bg-brand-700 disabled:bg-ink-300 disabled:cursor-not-allowed"
+        >
+          {pending ? "Saving…" : continueLabel}
+        </button>
+      )}
     </form>
   );
 }
 
 interface OptionCardProps {
   selected: boolean;
+  selecting?: boolean;
+  disabled?: boolean;
   onSelect: () => void;
   label: string;
   description?: string;
@@ -67,24 +90,39 @@ interface OptionCardProps {
 
 export function OptionCard({
   selected,
+  selecting = false,
+  disabled = false,
   onSelect,
   label,
   description,
 }: OptionCardProps) {
+  const active = selected || selecting;
   return (
     <button
       type="button"
       onClick={onSelect}
+      disabled={disabled}
+      aria-pressed={selected}
       className={
-        "w-full text-left rounded-lg border px-4 py-3 transition " +
-        (selected
-          ? "border-brand-500 bg-brand-50 ring-2 ring-brand-500/30"
-          : "border-ink-300 bg-white hover:border-brand-500/60")
+        "relative w-full text-left rounded-lg px-4 py-3 transition disabled:cursor-not-allowed " +
+        (active
+          ? "border-2 border-brand-500 bg-brand-50 shadow-sm"
+          : "border-2 border-ink-300 bg-white hover:border-brand-500/60 hover:bg-brand-50/40")
       }
     >
-      <div className="font-medium text-ink-900">{label}</div>
+      <div className={(active ? "font-semibold " : "font-medium ") + "text-ink-900"}>
+        {label}
+      </div>
       {description ? (
         <div className="text-xs text-ink-500 mt-0.5">{description}</div>
+      ) : null}
+      {active ? (
+        <span
+          aria-hidden
+          className="absolute right-3 top-1/2 -translate-y-1/2 flex h-6 w-6 items-center justify-center rounded-full bg-brand-500 text-white text-xs font-bold shadow"
+        >
+          ✓
+        </span>
       ) : null}
     </button>
   );

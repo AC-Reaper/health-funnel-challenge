@@ -11,6 +11,7 @@ interface StepWeightProps {
   error: string | null;
   fields: Record<string, string | string[]> | undefined;
   onSave: (body: { weightKg: number; targetWeightKg: number }) => Promise<void>;
+  onBack?: () => void;
 }
 
 function pickFieldMessage(
@@ -30,6 +31,7 @@ export function StepWeight({
   error,
   fields,
   onSave,
+  onBack,
 }: StepWeightProps) {
   const [w, setW] = useState<number | "">(initialWeight ?? "");
   const [t, setT] = useState<number | "">(initialTarget ?? "");
@@ -48,6 +50,7 @@ export function StepWeight({
       onContinue={() =>
         canContinue && onSave({ weightKg: w as number, targetWeightKg: t as number })
       }
+      onBack={onBack}
     >
       <NumberField
         id="weightKg"

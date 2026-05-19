@@ -10,9 +10,17 @@ interface StepAgeProps {
   error: string | null;
   fieldError?: string;
   onSave: (body: { ageYears: number }) => Promise<void>;
+  onBack?: () => void;
 }
 
-export function StepAge({ initial, pending, error, fieldError, onSave }: StepAgeProps) {
+export function StepAge({
+  initial,
+  pending,
+  error,
+  fieldError,
+  onSave,
+  onBack,
+}: StepAgeProps) {
   const [value, setValue] = useState<number | "">(initial ?? "");
   const canContinue = typeof value === "number" && value >= 13 && value <= 100;
 
@@ -23,6 +31,7 @@ export function StepAge({ initial, pending, error, fieldError, onSave }: StepAge
       error={error}
       canContinue={canContinue}
       onContinue={() => canContinue && onSave({ ageYears: value })}
+      onBack={onBack}
     >
       <NumberField
         id="ageYears"
