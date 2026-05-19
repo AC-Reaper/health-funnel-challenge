@@ -35,12 +35,20 @@ export function StepMainGoal({
   const [value, setValue] = useState<MainGoal | undefined>(initial);
   const [selecting, setSelecting] = useState<MainGoal | null>(null);
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const wasPendingRef = useRef(pending);
 
   useEffect(() => {
     return () => {
       if (timerRef.current) clearTimeout(timerRef.current);
     };
   }, []);
+
+  // review-008 I001: clear `selecting` on a pending true→false transition
+  // so failed PATCHes don't leave the step disabled. See StepGender.
+  useEffect(() => {
+    if (wasPendingRef.current && !pending) setSelecting(null);
+    wasPendingRef.current = pending;
+  }, [pending]);
 
   function pick(v: MainGoal) {
     if (pending || selecting) return;

@@ -28,12 +28,24 @@ export function StepGender({
   const [value, setValue] = useState<Gender | undefined>(initial);
   const [selecting, setSelecting] = useState<Gender | null>(null);
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const wasPendingRef = useRef(pending);
 
   useEffect(() => {
     return () => {
       if (timerRef.current) clearTimeout(timerRef.current);
     };
   }, []);
+
+  // review-008 I001: if the PATCH resolved (pending true → false) and the
+  // step did not unmount (failure path: error stays on this step, no
+  // viewStep advance), clear `selecting` so the user can re-click without
+  // being locked into the disabled state. The check uses a transition, not
+  // a bare `!pending`, so the 250ms timer-only window (selecting set but
+  // pending still false) doesn't prematurely reset.
+  useEffect(() => {
+    if (wasPendingRef.current && !pending) setSelecting(null);
+    wasPendingRef.current = pending;
+  }, [pending]);
 
   function pick(v: Gender) {
     if (pending || selecting) return;

@@ -36,12 +36,22 @@ export function StepActivity({
   const [value, setValue] = useState<ActivityLevel | undefined>(initial);
   const [selecting, setSelecting] = useState<ActivityLevel | null>(null);
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const wasPendingRef = useRef(pending);
 
   useEffect(() => {
     return () => {
       if (timerRef.current) clearTimeout(timerRef.current);
     };
   }, []);
+
+  // review-008 I001: clear `selecting` on a pending true→false transition
+  // so failed PATCH or failed /submit doesn't leave the step disabled.
+  // Especially important here since activity also chains into /submit;
+  // either step failing leaves us mounted on this view.
+  useEffect(() => {
+    if (wasPendingRef.current && !pending) setSelecting(null);
+    wasPendingRef.current = pending;
+  }, [pending]);
 
   function pick(v: ActivityLevel) {
     if (pending || selecting) return;

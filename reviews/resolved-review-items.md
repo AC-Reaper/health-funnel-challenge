@@ -766,3 +766,16 @@ Resolved in:
 Verification:
 `grep -nE "ADR-001…013|Postman collection (mirroring|mirrors)|decimal\(4,2\)|idempotency_key text|currency text|flesh out Prisma schema|complete request/response/error contracts" docs/02-architecture.md` returns no matches inside live submission text. Re-review marked I001 / I003 as fully resolved alongside this fix.
 Status: Resolved 2026-05-19 on `feature/day5-hardening`.
+
+## review-008 I001: auto-advance steps stayed disabled after a failed PATCH
+
+Source: `reviews/review-008-frontend-polish.md`
+
+Resolved in:
+- `app/funnel/steps/StepGender.tsx`
+- `app/funnel/steps/StepMainGoal.tsx`
+- `app/funnel/steps/StepActivity.tsx`
+
+Verification:
+Each auto-advance step now tracks a `wasPendingRef` and, in a `useEffect` keyed on `pending`, clears `selecting` whenever `pending` transitions `true → false`. This covers the failure paths Codex flagged: a 422 / 5xx / coherence rejection where the parent sets `pending=false` and `error=msg` without unmounting the step — the user can immediately re-click another option. The transition guard (not a bare `!pending`) keeps the 250ms timer-only window from prematurely resetting `selecting` before `onSave` is even invoked. Activity step also covers the chained `/submit` failure path. Manual smoke: trigger a 5xx on `gender` PATCH (e.g. via DevTools network throttling + offline) → error renders inline → options are clickable again without refresh.
+Status: Resolved 2026-05-19 on `feature/frontend-polish`.
