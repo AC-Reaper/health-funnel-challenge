@@ -100,7 +100,7 @@ All errors share one envelope, regardless of status code:
 | 403 | `FORBIDDEN_ORIGIN` | `Origin` header present and does not match the receiving host. Sent only when `Origin` is set (cURL / server-internal fetch are unaffected). See `docs/08-security-hardening.md` §2. |
 | 404 | `NOT_FOUND` | Resource id is well-formed but does not exist. |
 | 409 | `STEP_OUT_OF_ORDER` | Step save would skip a required earlier step. |
-| 409 | `NOT_SUBMITTED` | Result requested before `/submit`. |
+| 409 | `NOT_SUBMITTED` | Result or payment requested before `/submit`. Used by both `GET /api/v1/results/me` and `POST /api/v1/pay`. |
 | 409 | `ALREADY_SUBMITTED` | `/submit` called again with different inputs (we still return 200 with the existing result for identical replays — see `/submit`). |
 | 422 | `VALIDATION_ERROR` | Zod validation failed on body or step. |
 | 422 | `INCOMPLETE_ASSESSMENT` | `/submit` called while required answers are missing. |
@@ -397,7 +397,12 @@ All errors share one envelope, regardless of status code:
     "paidAt": "2026-05-18T09:37:00.000Z"
   }
   ```
-- **400 BAD_REQUEST** if `Idempotency-Key` missing.
+- **400 BAD_REQUEST** if `Idempotency-Key` missing or non-printable-ASCII.
+- **403 FORBIDDEN_ORIGIN** if `Origin` is present and does not match
+  the receiving host/scheme.
+- **409 NOT_SUBMITTED** if the session has not been submitted yet
+  (`session.status !== 'submitted'`). Submit must precede pay; the
+  browser `/pay` page does the same check via `GET /results/me`.
 
 ---
 
