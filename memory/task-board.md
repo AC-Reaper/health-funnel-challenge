@@ -23,16 +23,14 @@ Owner is who does the work; reviews follow the AGENTS.md §5 flow.
 
 ### Day 5 — Hardening + final review
 
-(T-501..T-504 shipped on `feature/day5-hardening`; T-505 In Progress
-until Codex writes review-004-final.)
+(T-501..T-505 shipped and final-reviewed on `feature/day5-hardening`;
+see Done column.)
 
 ## In Progress
 
-- T-505 — Claude — Codex re-reviewed `feature/day5-hardening` at `495b7ed`. No Blocking findings; I002 and N001 are verified resolved. One Important remains in `docs/02-architecture.md` before `review-004-final` can close and the branch can merge to `main`.
+(None.)
 
 ## Review
-
-- T-501 / T-502 / T-503 / T-504 — Claude — `feature/day5-hardening` shipped Day-5 hardening + closeout. Files: `lib/session.ts` (server-side cookie TTL via `iat` + 30d expiry + 60s clock-skew, ADR-014), `tests/lib/session.test.ts` (+6 TTL cases), `prisma/schema.prisma` (new `StepEvent` model), `prisma/migrations/20260519000000_add_step_event/migration.sql`, `app/api/v1/sessions/me/steps/[stepKey]/route.ts` + `lib/step-repo.ts` (assessment/session/step_event transaction seam), `tests/lib/step-repo.test.ts`, `docs/03-database-design.md` (Mermaid + entity), `docs/05-ai-collaboration-log.md` (per-phase retrospectives), `README.md`, `docs/07-delivery-checklist.md`, `memory/decisions.md` (ADR-009 → Accepted, new ADR-014), `reviews/resolved-review-items.md`. Re-reviewed at `495b7ed`: 184 tests green; `typecheck`, `db:validate`, and build clean. One `docs/02-architecture.md` Important remains.
 
 - T-301 / T-302 / T-303 / T-304 — Claude — `feature/assessment-result-api` shipped + review-006 findings addressed (B001 / I001 / I002 / N001 / N002; N003 deferred to Day 4). New files: `lib/health/calculator.ts` (pure, versioned `v1.0.0-mifflin`), `lib/validation/assessment.ts` (composed FULL_ASSESSMENT_SCHEMA), `lib/result-repo.ts` (idempotent submit transaction + P2002 race recovery), `lib/serializers/result.ts` (separate `TeaserResultDTO` / `FullResultDTO` types + leak-tested), `lib/payment.ts` (pure `decidePaymentAction` + transactional `processPayment` covering ADR-006 same-key replay + ADR-012 already-paid no-op + free→paid insert+flip), `app/api/v1/sessions/me/submit/route.ts`, `app/api/v1/results/me/route.ts`, `app/api/v1/pay/route.ts`, `app/pay/{page,PayButton}.tsx`, `app/results/page.tsx`. Tests: `tests/lib/health/calculator.test.ts`, `tests/lib/validation/assessment.test.ts`, `tests/lib/serializers/result.test.ts` (leak invariant), `tests/lib/payment.test.ts`. 108 → 160 tests, all green. `tsc --noEmit` + `next build` clean (9 routes total). Live cookie-jar smoke against Supabase: 11 paths green incl. `/submit` idempotent (same `resultId` on replay), `/results/me` teaser → JSON missing every paid field name, `/results/me` 409 `NOT_SUBMITTED` before submit, `/pay` 400 without `Idempotency-Key`, same-key replay returns same `paymentId`, new-key against paid silently no-ops (Prisma `payment.findMany` shows exactly one row). Awaits Codex review of the Day-3 surface before merge to `main`.
 
@@ -72,3 +70,4 @@ until Codex writes review-004-final.)
 - 2026-05-19 — Codex — `reviews/review-006-day3.md` (1 Blocking, 2 Important, 3 Nice-to-have).
 - 2026-05-19 — Claude — Adopted 5/6 review-006 findings on `feature/assessment-result-api`. B001: extracted `SubmitTxOps`/`PaymentTxOps` seams + committed Vitest state-machine tests against in-memory fakes (175 tests). I001: `FULL_ASSESSMENT_SCHEMA.superRefine` runs `checkWeightCoherence` (moved to `lib/health/coherence.ts`); `/submit` rejects incoherent rows before invoking `compute()`. I002: truncated curves no longer snap final point to `target`; new boundary test for `weightKg=250 → 175` at exactly 30%. N001: `docs/04 §5` Test invariant now lists `algorithmVersion`. N002: duplicate Day-3 row removed from `README.md`. N003: deferred to T-401/T-402 (Codex's own Day-4 suggestion). 166 → 175 tests, all green.
 - 2026-05-19 — Claude + Owner + Codex — T-401 / T-402 / T-403 / T-404 Day-4 UI + deploy closed. `feature/frontend-funnel` shipped Tailwind landing, six-step `/funnel`, `/pay` readiness gate, `/results` restyle, deploy notes, and browser walkthrough. Production URL `https://project-u415a.vercel.app/` passes Codex review-007 browser smoke: no-cookie `/pay` redirects to `/`, quiz → teaser → `/pay` → full result works. Preview protection issue also resolved. Day 4 is fully closed from review perspective.
+- 2026-05-19 — Claude + Codex — T-501 / T-502 / T-503 / T-504 / T-505 Day-5 hardening and final review closed on `feature/day5-hardening` at `f2b37f8`. Server-side cookie TTL, `step_event` audit table + transaction seam/tests, schema diagram, AI collaboration log, README/checklist cleanup, and `reviews/resolved-review-items.md` are all verified. Codex `reviews/review-004-final.md` is Resolved; `typecheck`, 184 tests, `db:validate`, and build pass.

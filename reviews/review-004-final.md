@@ -2,9 +2,9 @@
 
 ## Status
 
-Open — 2026-05-19, re-reviewed at `495b7ed`
+Resolved — 2026-05-19, final re-reviewed at `f2b37f8`
 
-Branch reviewed: `feature/day5-hardening` at `1d55b1b`
+Original branch reviewed: `feature/day5-hardening` at `1d55b1b`
 
 Scope reviewed:
 - T-501: server-side cookie TTL in `lib/session.ts` and `tests/lib/session.test.ts`
@@ -157,9 +157,39 @@ References:
 
 None.
 
+## Final Re-review — f2b37f8
+
+Re-review date: 2026-05-19
+
+Branch reviewed: `feature/day5-hardening` at `f2b37f8`
+
+Verification run:
+- `npm run typecheck` — pass
+- `npm test` — pass, 184 tests
+- `npm run db:validate` — pass
+- `npm run build` — pass
+
+Resolution check:
+- I001: resolved. `docs/03-database-design.md` and
+  `docs/02-architecture.md` now both represent the shipped five-table
+  model, Day-5 `step_event`, and ADR-009/ADR-014 state consistently.
+- I002: resolved. API/auth docs match the server-side cookie TTL
+  implementation.
+- I003: resolved. README, API docs, delivery checklist, and architecture
+  scope now agree on final deliverables; Postman is explicitly scoped out
+  in favour of the cURL cookie-jar walkthrough.
+- N001: resolved. The `StepsTxOps` seam and 3 committed Vitest cases give
+  lightweight regression proof for the `step_event` write path.
+- I004: resolved. `docs/02-architecture.md` no longer contains the stale
+  ADR heading, Postman in-scope claim, old schema field types, or obsolete
+  open-followups.
+
+Final findings:
+- Blocking: none.
+- Important: none.
+- Nice-to-have: none.
+
 ## Recommendation
 
-Do not add product scope. The code-side closeout is good: T-501 and N001 now
-have tests, and T-502/T-503/T-504 are represented in the repo. Fix the small
-`docs/02-architecture.md` drift above, then re-request a very short final
-review. After that, review-004 should be able to close as Resolved.
+Review-004 is closed. From the reviewer perspective, `feature/day5-hardening`
+is ready to merge to `main` and use as the final submitted repo state.

@@ -3,8 +3,8 @@
 ## Current Project
 
 Health quiz funnel full-stack challenge for Ruiqi Technology (睿迄科技).
-5-day delivery. Day 5 hardening is under final Codex re-review on
-`feature/day5-hardening` at `495b7ed`; ADR-001…014 are Accepted.
+5-day delivery. Day 5 hardening passed final Codex re-review on
+`feature/day5-hardening` at `f2b37f8`; ADR-001…014 are Accepted.
 
 ## Final Goal
 
@@ -87,17 +87,17 @@ payment.
 - Test suite → `tests/**` (vitest, 184 tests)
 - ADR log → `memory/decisions.md` (ADR-001…014 Accepted)
 - Open questions → `memory/open-questions.md` (no open blocker)
-- Latest reviews → `reviews/review-004-final.md` (Open after `495b7ed`: no Blocking; one Important `docs/02-architecture.md` final-doc drift remains); `reviews/review-007-browser-smoke.md` (Resolved); `reviews/review-006-day3.md` (Resolved); `reviews/review-002-api.md` and `reviews/review-003-db.md` are resolved for earlier branches.
+- Latest reviews → `reviews/review-004-final.md` (Resolved at `f2b37f8`: no Blocking, Important, or Nice-to-have findings remain); `reviews/review-007-browser-smoke.md` (Resolved); `reviews/review-006-day3.md` (Resolved); `reviews/review-002-api.md` and `reviews/review-003-db.md` are resolved for earlier branches.
 
 ## Current Branch
 
 `feature/day5-hardening` — Day-5 closeout branch with server-side cookie
 TTL (`iat` + 30d expiry), minimal `step_event` audit table + PATCH
 transaction write, schema diagram refresh, AI collaboration log, and final
-review closeout. Codex re-reviewed `495b7ed` on 2026-05-19:
+review closeout. Codex final re-reviewed `f2b37f8` on 2026-05-19:
 `npm run typecheck`, `npm test` (184), `npm run db:validate`, and
-`npm run build` pass. I002 and N001 are verified resolved; one Important
-`docs/02-architecture.md` drift remains before review-004 can close.
+`npm run build` pass. All review-004 findings are resolved; branch is
+ready to merge to `main` from the reviewer perspective.
 
 ## Code Management
 
