@@ -34,12 +34,11 @@ Full decision history lives in `memory/decisions.md` (ADR-001…013).
 
 ## Status
 
-Day 1–4 features shipped. Full funnel loop runs end-to-end against
+Day 1–5 features shipped. Full funnel loop runs end-to-end against
 Supabase: anonymous session → 6-step browser quiz → submit → calculator
-→ gated teaser → mock `/pay` → full result. 175 unit tests green; live
-cookie-jar smoke covers happy + sad paths for every endpoint. Day-5 work
-(edge-case hardening + optional `step_event` + AI collaboration log +
-Codex final review) is next.
+→ gated teaser → mock `/pay` → full result. 181 unit tests green; live
+cookie-jar smoke covers happy + sad paths for every endpoint; Codex
+review-007 verified the deployed browser flow.
 
 ## To be added (in implementation order)
 
@@ -49,7 +48,7 @@ Codex final review) is next.
 | Day 2 | ✅ Zod step schemas + `PATCH /api/v1/sessions/me/steps/:stepKey` with first-incomplete-step + weight-coherence rules + vitest with 108 unit tests (`feature/funnel-persistence-api`, merged). |
 | Day 3 | ✅ Pure health calculator (`lib/health/calculator.ts`) + `POST /api/v1/sessions/me/submit` + two-serializer `GET /api/v1/results/me` (leak-tested) + mock `POST /api/v1/pay` with `Idempotency-Key` + minimal `/pay` and `/results` browser pages (`feature/assessment-result-api`, awaits Codex re-review of review-006 closeout). |
 | Day 4 | ✅ Polished funnel UI (`/funnel` server-bootstrapped stepper, Tailwind), `/pay` UX gate on `GET /results/me` (closes review-006 N003), `/results` restyle, Vercel + Supabase deploy, cookie-jar cURL walkthrough below (`feature/frontend-funnel`). |
-| Day 5 | Edge-case hardening, optional `step_event`, schema diagram, AI collaboration log, Codex final review. |
+| Day 5 | ✅ Server-side cookie TTL (`iat` + 30d expiry), `step_event` minimal audit table (ADR-009 Accepted), schema diagram refreshed, AI collaboration log filled, Codex final review (`feature/day5-hardening`). |
 
 ## Code management
 
@@ -98,7 +97,7 @@ npm run dev   # http://localhost:3000
 | `npm run build` | `prisma generate` + `next build` (used on Vercel) |
 | `npm run start` | Production server (after `npm run build`) |
 | `npm run typecheck` | `tsc --noEmit` |
-| `npm test` | Vitest, 175 unit tests |
+| `npm test` | Vitest, 181 unit tests |
 | `npm run db:deploy` | `prisma migrate deploy` against `DIRECT_URL` |
 
 Node 20 LTS is pinned via `.nvmrc`.
@@ -185,6 +184,29 @@ curl -sS -b "$JAR" "$BASE/api/v1/results/me" | jq   # now kind="full"
 Browser path (same flow, polished UI): visit `$BASE/`, click **Start the
 quiz**, complete six steps, hit **Pay**, land on the full plan at
 `$BASE/results`.
+
+## Edge cases verified (T-501)
+
+Six failure / replay paths the brief calls out, each pinned to the
+artefact that locks it. No box is ticked on live smoke alone — every
+case has a committed test or a documented DB invariant.
+
+| Case | Verified by |
+| - | - |
+| Refresh mid-step (resume from first incomplete) | `lib/progress.ts::computeCurrentStep` + `tests/lib/progress.test.ts` + server-bootstrapped `/funnel` page (`app/funnel/page.tsx`) |
+| Double-submit (same session POSTs `/submit` twice) | `tests/lib/result-repo.test.ts` "idempotent replay" + DB `UNIQUE result.session_id` |
+| Double-pay same `Idempotency-Key` | `tests/lib/payment.test.ts` "idempotent same-key replay" + DB `UNIQUE payment(session_id, idempotency_key)` |
+| Already-paid + new `Idempotency-Key` (silent no-op, ADR-012) | `tests/lib/payment.test.ts` "already-paid + NEW key → silent no-op" + DB partial unique index `payment_one_success_per_session_idx` |
+| Tampered cookie (bit-flip / swapped `sid`) | `tests/lib/session.test.ts` "rejects a tampered signature" + "rejects a signature valid for a different sid" |
+| **Expired cookie** (server-side TTL, T-501) | `tests/lib/session.test.ts` "verifyCookie TTL" — 6 cases including 1-second-past-30d, future-dated `iat`, missing `iat`, tampered `iat` |
+
+The Day-5 cookie change adds an `iat` (issued-at unix seconds) to the
+signed payload; `verifyCookie` enforces `now - iat < 30d` with a 60-
+second clock-skew tolerance. The HMAC commits to both `sid` and `iat`,
+so `iat` cannot be tampered without invalidating the signature.
+Existing prod cookies issued before Day 5 are rejected and the next
+PATCH/GET triggers a fresh `POST /api/v1/sessions` — invisible to the
+end user.
 
 ## Documentation
 
