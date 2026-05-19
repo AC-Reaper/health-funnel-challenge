@@ -8,8 +8,10 @@ import {
   jsonError,
   noSession,
 } from "@/lib/api/errors";
+import { IDEMPOTENCY_KEY_SCHEMA } from "@/lib/api/idempotency-key";
 import { parseJsonBody } from "@/lib/api/parse-body";
 import { getRequestId } from "@/lib/api/request-id";
+import { checkSameOrigin } from "@/lib/api/same-origin";
 import { processPayment, serializePayment } from "@/lib/payment";
 import {
   COOKIE_NAME,
@@ -20,10 +22,12 @@ import {
 export const dynamic = "force-dynamic";
 
 const PayBody = z.object({}).strict();
-const IdempotencyKeySchema = z.string().min(1).max(128);
 
 export async function POST(req: Request) {
   const requestId = getRequestId(req);
+
+  const originCheck = checkSameOrigin(req, requestId);
+  if (!originCheck.ok) return originCheck.res;
 
   try {
     const sid = verifyCookie(cookies().get(COOKIE_NAME)?.value);
@@ -33,13 +37,14 @@ export async function POST(req: Request) {
     if (!session) return noSession(requestId);
 
     const rawKey = req.headers.get("idempotency-key");
-    const keyParsed = IdempotencyKeySchema.safeParse(rawKey);
+    const keyParsed = IDEMPOTENCY_KEY_SCHEMA.safeParse(rawKey);
     if (!keyParsed.success) {
       return jsonError({
         status: 400,
         code: ERROR_CODES.BAD_REQUEST,
         message:
-          "Idempotency-Key header is required and must be 1-128 characters.",
+          keyParsed.error.issues[0]?.message ??
+          "Idempotency-Key header is required.",
         requestId,
       });
     }
