@@ -12,29 +12,43 @@ export const COOKIE_NAME = "hfc_session";
 export const COOKIE_MAX_AGE_SECONDS = 60 * 60 * 24 * 30;
 
 const SIG_HEX_LENGTH = 64;
+/**
+ * Tolerance for clock skew between the signing host and the verifying host.
+ * 60s is small enough that a clock-skew abuser still loses TTL headroom and
+ * large enough that a healthy NTP-synced fleet never trips the future-iat
+ * branch.
+ */
+const COOKIE_CLOCK_SKEW_SECONDS = 60;
 
 // ---------- Cookie sign / verify (pure) ----------
 
 interface CookiePayload {
   sid: string;
+  iat: number;
   sig: string;
 }
 
-function hmac(sid: string): string {
+function hmac(sid: string, iat: number): string {
   return createHmac("sha256", env.SESSION_COOKIE_SECRET)
-    .update(sid)
+    .update(`${sid}.${iat}`)
     .digest("hex");
 }
 
+function nowSeconds(): number {
+  return Math.floor(Date.now() / 1000);
+}
+
 export function signCookie(sid: string): string {
-  const payload: CookiePayload = { sid, sig: hmac(sid) };
+  const iat = nowSeconds();
+  const payload: CookiePayload = { sid, iat, sig: hmac(sid, iat) };
   return Buffer.from(JSON.stringify(payload), "utf8").toString("base64url");
 }
 
 /**
  * Decode and verify a cookie value. Returns the session id on success, or
  * `null` for any failure mode (missing, malformed base64url, malformed JSON,
- * missing fields, wrong-length signature, or signature mismatch).
+ * missing fields, wrong-length signature, signature mismatch, missing/invalid
+ * `iat`, future-dated `iat`, or `iat` older than COOKIE_MAX_AGE_SECONDS).
  */
 export function verifyCookie(raw: string | undefined): string | null {
   if (!raw) return null;
@@ -57,15 +71,21 @@ export function verifyCookie(raw: string | undefined): string | null {
     !parsed ||
     typeof parsed !== "object" ||
     typeof (parsed as Record<string, unknown>).sid !== "string" ||
+    typeof (parsed as Record<string, unknown>).iat !== "number" ||
     typeof (parsed as Record<string, unknown>).sig !== "string"
   ) {
     return null;
   }
 
-  const { sid, sig } = parsed as CookiePayload;
+  const { sid, iat, sig } = parsed as CookiePayload;
+  if (!Number.isInteger(iat)) return null;
   if (sig.length !== SIG_HEX_LENGTH) return null;
 
-  const expected = Buffer.from(hmac(sid), "hex");
+  const now = nowSeconds();
+  if (iat > now + COOKIE_CLOCK_SKEW_SECONDS) return null;
+  if (now - iat > COOKIE_MAX_AGE_SECONDS) return null;
+
+  const expected = Buffer.from(hmac(sid, iat), "hex");
   const provided = Buffer.from(sig, "hex");
   if (provided.length !== expected.length) return null;
   if (!timingSafeEqual(expected, provided)) return null;
