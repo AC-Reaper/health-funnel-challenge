@@ -207,6 +207,14 @@ The calculator is fixture-tested across the boundary set the validation layer ad
   ```
   Idempotency is therefore enforced by the DB unique constraint, not by application logic.
 - No roles, no admin, no JWT. The cookie is signed (HMAC, `SESSION_COOKIE_SECRET`), httpOnly, `SameSite=Lax`, `Secure` in prod, ~30-day max-age.
+- Baseline response headers (XCTO / XFO / Referrer-Policy /
+  Permissions-Policy / a conservative `frame-ancestors`-only CSP)
+  ship from `next.config.mjs:headers()` on every route; personalised
+  `/api/v1` responses additionally carry `Cache-Control: private,
+  no-store, max-age=0`. Optional `APP_ORIGIN` env var pins the
+  origin used by server-side internal fetches in production (falls
+  back to `x-forwarded-*` headers when unset). See
+  `docs/08-security-hardening.md` §3.1–§3.3.
 
 ---
 
@@ -291,7 +299,7 @@ Each day ends at a Codex review trigger so quality is loaded throughout, not bol
 | Email / notifications | No identity → no email. |
 | Admin dashboard | Not graded; Supabase SQL editor suffices. |
 | Sentry / APM | Vercel logs are enough for the demo window. |
-| Rate limiting beyond DB-enforced idempotency | In-memory limits are unreliable on serverless. README points to Upstash/Vercel KV as the prod path. |
+| Rate limiting beyond DB-enforced idempotency | In-memory limits are unreliable on serverless. `docs/08-security-hardening.md` §5 points to Upstash/Vercel KV throttling `/sessions` and `/pay` first as the prod path. |
 | GraphQL / tRPC | Brief evaluates REST path/method design. Adding either would obscure that signal. |
 | Pre-seeded paid `sessionId` | Cookie-only auth makes a raw UUID unusable from outside the browser; replaced with a cURL cookie-jar walkthrough in the README. |
 | UUIDv7 | No measurable benefit at this scale; using `crypto.randomUUID()` instead. |
