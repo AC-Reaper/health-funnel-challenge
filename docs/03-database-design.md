@@ -11,18 +11,19 @@
 
 ## 1. Overview
 
-Four tables on Postgres / Supabase:
+Five tables on Postgres / Supabase:
 
 - `session` — anonymous funnel attempt + entitlement.
 - `assessment` — 1:1 with session; the user's quiz answers.
 - `result` — 1:1 with submitted session; immutable computation snapshot.
 - `payment` — N:1 with session; audit + idempotency for the mock `/pay`.
+- `step_event` — N:1 with session; append-only audit of every successful
+  PATCH on `/sessions/me/steps/:stepKey` (ADR-009, T-502, shipped Day 5).
 
 Out of this schema, by accepted decisions:
 
 - No `user` table — anonymous-only identity (ADR-004).
 - No `subscription` table — entitlement collapsed into `session` (ADR-007).
-- No `step_event` audit table on Day 1 — deferred (ADR-009); may ship on Day 5.
 
 All ids are UUIDv4 — DB default via `gen_random_uuid()` (pgcrypto), with
 app code using `crypto.randomUUID()` for explicit control. All timestamps
@@ -36,6 +37,7 @@ erDiagram
     SESSION ||--o| ASSESSMENT : "1:0..1"
     SESSION ||--o| RESULT     : "1:0..1"
     SESSION ||--o{ PAYMENT    : "1:0..n"
+    SESSION ||--o{ STEP_EVENT : "1:0..n"
 
     SESSION {
         uuid                id PK
@@ -83,7 +85,20 @@ erDiagram
         char_3         currency
         timestamptz    created_at
     }
+
+    STEP_EVENT {
+        uuid           id PK
+        uuid           session_id FK
+        step_key       step_key
+        jsonb          value_json
+        timestamptz    created_at
+    }
 ```
+
+Not visualised: the partial unique index `payment_one_success_per_session_idx`
+on `payment(session_id) WHERE status='succeeded'` (Prisma cannot model
+partial indexes, so it lives in `migration.sql` only). It backstops
+ADR-012's "exactly one successful payment per session" invariant.
 
 ## 3. Entities
 
@@ -171,6 +186,24 @@ data (it does **not** mean payment rows outlive a successful delete —
 the delete is blocked outright). CASCADE on `assessment` and `result`
 is fine because those are derived from the session.
 
+### `step_event`
+
+Append-only audit. One row per successful PATCH
+`/sessions/me/steps/:stepKey`. Written inside the same transaction as
+the assessment write so the audit can never disagree with the data
+(ADR-009, T-502).
+
+| Column | Type | Null | Default | Notes |
+| - | - | - | - | - |
+| `id` | `uuid` | no | `gen_random_uuid()` | |
+| `session_id` | `uuid` | no | — | FK → `session.id`. **CASCADE** on delete. |
+| `step_key` | `step_key` | no | — | Which step the user just answered. |
+| `value_json` | `jsonb` | no | — | Parsed Zod body verbatim (e.g. `{"gender":"female"}`, `{"weightKg":80,"targetWeightKg":70}`). |
+| `created_at` | `timestamptz` | no | `now()` | |
+
+Index: `(session_id, created_at)` btree. No unique constraint — replays
+write additional rows so the audit reflects the user's input cadence.
+
 ## 4. Enums
 
 Postgres native enums (Prisma `@@map` for snake_case at the DB layer).
@@ -195,10 +228,12 @@ requires an ADR.
 - `result(session_id)` UNIQUE — one result per session.
 - `payment(session_id, idempotency_key)` UNIQUE — enforces same-key idempotency (ADR-006).
 - `payment(session_id) WHERE status='succeeded'` UNIQUE (partial) — backstops ADR-012 "one successful payment per session". Defined in SQL only; Prisma cannot model partial indexes.
+- `step_event(session_id, created_at)` btree — supports audit reads ordered by time per session.
 - `assessment(session_id)` is the primary key (implicit unique).
 - No additional FK indexes added: Postgres creates an index for primary
   keys and unique constraints automatically; the `payment.session_id`
-  column is covered by the composite unique above.
+  and `step_event.session_id` columns are covered by the composite
+  unique / composite btree above.
 
 ## 6. Migration runbook
 
@@ -211,18 +246,22 @@ requires an ADR.
   2. The partial unique index
      `payment_one_success_per_session_idx` appended at the end,
      because Prisma cannot model partial indexes (see §5).
+- Day-5 follow-up migration: `prisma/migrations/20260519000000_add_step_event/migration.sql`.
+  Adds the `step_event` table + `(session_id, created_at)` index + FK
+  with `ON DELETE CASCADE`. Standard `prisma migrate diff` output, no
+  manual edits.
 - To apply against Supabase (or any Postgres):
   1. `cp .env.example .env` and fill `DATABASE_URL` (pooled) and
      `DIRECT_URL` (direct). Supabase exposes both in the project's
      **Connection** settings.
   2. `npm install`
   3. `npm run db:deploy` (runs `prisma migrate deploy` against
-     `DIRECT_URL`; the pooler does not support migrations).
-  4. Sanity check: `psql "$DIRECT_URL" -c "\dt"` lists the four tables.
+     `DIRECT_URL`; the pooler does not support migrations). Applies
+     both `20260518000000_init` and `20260519000000_add_step_event`.
+  4. Sanity check: `psql "$DIRECT_URL" -c "\dt"` lists the five tables
+     (`session`, `assessment`, `result`, `payment`, `step_event`).
 - For schema changes after this branch: edit `prisma/schema.prisma`,
   then `npx prisma migrate dev --name <slug>` (requires a dev Postgres
   reachable via `DIRECT_URL`; this generates a new timestamped
   migration). Never edit a shipped migration in place.
 - No destructive migrations during the 5-day window without an ADR.
-- `step_event` (ADR-009) will ship behind its own migration if reopened
-  on Day 5.

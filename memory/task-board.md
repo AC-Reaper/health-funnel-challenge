@@ -19,25 +19,18 @@ Owner is who does the work; reviews follow the AGENTS.md §5 flow.
 
 ### Day 4 — UI + deploy
 
-(All code surfaces shipped on `feature/frontend-funnel`; see Review column.
-T-403 deploy still requires Owner to provision Vercel env vars and run
-`npm run db:deploy` against `DIRECT_URL`.)
+(All shipped and browser-smoked on production; see Done column.)
 
 ### Day 5 — Hardening + final review
 
-- T-501 — Claude — Edge cases: refresh mid-step, double-submit, double-pay same-key replay, already-paid new-key no-op, tampered cookie, expired cookie
-- T-502 — Claude — Optional (only if slack): `step_event` audit table + writes
-- T-503 — Claude — Schema diagram (Mermaid in `docs/03-database-design.md`)
-- T-504 — Claude — `docs/05-ai-collaboration-log.md`: per-phase AI usage
-- T-505 — Claude requests `reviews/review-004-final.md`; Codex writes it; Claude addresses every Blocking item
+(T-501..T-505 shipped and final-reviewed on `feature/day5-hardening`;
+see Done column.)
 
 ## In Progress
 
-- None.
+(None.)
 
 ## Review
-
-- T-401 / T-402 / T-403 / T-404 — Claude + Owner — `feature/frontend-funnel` shipped Day-4 UI + deploy + cookie-jar walkthrough. New files: `tailwind.config.ts`, `postcss.config.js`, `app/globals.css`, `app/funnel/{page,FunnelStepper,ProgressBar}.tsx`, `app/funnel/lib/patchStep.ts`, `app/funnel/steps/Step{Shell,Gender,MainGoal,Age,Height,Weight,Activity}.tsx`, `app/StartFunnelButton.tsx`, `lib/internal-fetch.ts`. Modified: `app/layout.tsx`, `app/page.tsx`, `app/pay/{page,PayButton}.tsx` (review-006 N003), `app/results/page.tsx`, `README.md`. Five Conventional Commits. 175 tests green; `tsc --noEmit` + `npm run build` clean (10 routes). **Live verification**: Vercel project provisioned at `https://project-u415a.vercel.app/` (production tracks `main`) and `https://project-u415a-oafjf8eba-jackz1.vercel.app/` (preview tracks `feature/frontend-funnel`); SESSION_COOKIE_SECRET rotated for prod; API-level cookie-jar walkthrough green on production URL (8/8 README steps incl. `Set-Cookie Secure; HttpOnly; SameSite=Lax`, leak invariant, ADR-012 new-key silent no-op). Codex browser-smoked the preview URL end-to-end in `reviews/review-007-browser-smoke.md` after Owner disabled Vercel Deployment Protection for Preview (B002 resolved). Review-007 remains Open only on B001 (production alias still serves the pre-Day-4 placeholder) — this resolves the moment `feature/frontend-funnel` merges into `main` and Vercel rebuilds production. Awaiting Owner go-ahead to merge.
 
 - T-301 / T-302 / T-303 / T-304 — Claude — `feature/assessment-result-api` shipped + review-006 findings addressed (B001 / I001 / I002 / N001 / N002; N003 deferred to Day 4). New files: `lib/health/calculator.ts` (pure, versioned `v1.0.0-mifflin`), `lib/validation/assessment.ts` (composed FULL_ASSESSMENT_SCHEMA), `lib/result-repo.ts` (idempotent submit transaction + P2002 race recovery), `lib/serializers/result.ts` (separate `TeaserResultDTO` / `FullResultDTO` types + leak-tested), `lib/payment.ts` (pure `decidePaymentAction` + transactional `processPayment` covering ADR-006 same-key replay + ADR-012 already-paid no-op + free→paid insert+flip), `app/api/v1/sessions/me/submit/route.ts`, `app/api/v1/results/me/route.ts`, `app/api/v1/pay/route.ts`, `app/pay/{page,PayButton}.tsx`, `app/results/page.tsx`. Tests: `tests/lib/health/calculator.test.ts`, `tests/lib/validation/assessment.test.ts`, `tests/lib/serializers/result.test.ts` (leak invariant), `tests/lib/payment.test.ts`. 108 → 160 tests, all green. `tsc --noEmit` + `next build` clean (9 routes total). Live cookie-jar smoke against Supabase: 11 paths green incl. `/submit` idempotent (same `resultId` on replay), `/results/me` teaser → JSON missing every paid field name, `/results/me` 409 `NOT_SUBMITTED` before submit, `/pay` 400 without `Idempotency-Key`, same-key replay returns same `paymentId`, new-key against paid silently no-ops (Prisma `payment.findMany` shows exactly one row). Awaits Codex review of the Day-3 surface before merge to `main`.
 
@@ -76,3 +69,5 @@ T-403 deploy still requires Owner to provision Vercel env vars and run
 - 2026-05-19 — Claude — Created `feature/assessment-result-api`; shipped T-301 (pure calculator + FULL_ASSESSMENT_SCHEMA), T-302 (idempotent `POST /sessions/me/submit` + result-repo with P2002 race recovery), T-303 (two-serializer `GET /results/me` with the leak invariant test that asserts `dailyCaloriesKcal` / `predictedTargetDate` / `curvePoints` / `"plan"` / `algorithmVersion` are absent from teaser JSON), T-304 (`POST /api/v1/pay` with `Idempotency-Key` header + single transaction + ADR-012 silent no-op). Day-4 placeholder `/pay` + `/results` browser pages so the loop is closeable from a browser. 7 Conventional Commits. 160 unit tests, all green. Live cookie-jar smoke against Supabase covered the full 11-step happy + sad path matrix; payment table verified to contain exactly one row even after a duplicate-key /pay attempt.
 - 2026-05-19 — Codex — `reviews/review-006-day3.md` (1 Blocking, 2 Important, 3 Nice-to-have).
 - 2026-05-19 — Claude — Adopted 5/6 review-006 findings on `feature/assessment-result-api`. B001: extracted `SubmitTxOps`/`PaymentTxOps` seams + committed Vitest state-machine tests against in-memory fakes (175 tests). I001: `FULL_ASSESSMENT_SCHEMA.superRefine` runs `checkWeightCoherence` (moved to `lib/health/coherence.ts`); `/submit` rejects incoherent rows before invoking `compute()`. I002: truncated curves no longer snap final point to `target`; new boundary test for `weightKg=250 → 175` at exactly 30%. N001: `docs/04 §5` Test invariant now lists `algorithmVersion`. N002: duplicate Day-3 row removed from `README.md`. N003: deferred to T-401/T-402 (Codex's own Day-4 suggestion). 166 → 175 tests, all green.
+- 2026-05-19 — Claude + Owner + Codex — T-401 / T-402 / T-403 / T-404 Day-4 UI + deploy closed. `feature/frontend-funnel` shipped Tailwind landing, six-step `/funnel`, `/pay` readiness gate, `/results` restyle, deploy notes, and browser walkthrough. Production URL `https://project-u415a.vercel.app/` passes Codex review-007 browser smoke: no-cookie `/pay` redirects to `/`, quiz → teaser → `/pay` → full result works. Preview protection issue also resolved. Day 4 is fully closed from review perspective.
+- 2026-05-19 — Claude + Codex — T-501 / T-502 / T-503 / T-504 / T-505 Day-5 hardening and final review closed on `feature/day5-hardening` at `f2b37f8`. Server-side cookie TTL, `step_event` audit table + transaction seam/tests, schema diagram, AI collaboration log, README/checklist cleanup, and `reviews/resolved-review-items.md` are all verified. Codex `reviews/review-004-final.md` is Resolved; `typecheck`, 184 tests, `db:validate`, and build pass.

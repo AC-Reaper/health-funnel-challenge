@@ -1,6 +1,6 @@
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
-import { signCookie, verifyCookie } from "@/lib/session";
+import { COOKIE_MAX_AGE_SECONDS, signCookie, verifyCookie } from "@/lib/session";
 
 const VALID_SID = "f8fd9992-7ea9-44d9-ac89-e04e14eaf314";
 
@@ -63,5 +63,80 @@ describe("verifyCookie failure modes", () => {
     decoded.sid = "bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb";
     const swapped = Buffer.from(JSON.stringify(decoded), "utf8").toString("base64url");
     expect(verifyCookie(swapped)).toBeNull();
+  });
+});
+
+// ---------- T-501: server-side TTL (iat + 30d expiry, ADR-014) ----------
+
+function decodeCookie(raw: string): { sid: string; iat: number; sig: string } {
+  return JSON.parse(Buffer.from(raw, "base64url").toString("utf8"));
+}
+
+function encodeCookie(payload: { sid: string; iat: number; sig: string }): string {
+  return Buffer.from(JSON.stringify(payload), "utf8").toString("base64url");
+}
+
+describe("verifyCookie TTL (T-501 expired-cookie hardening)", () => {
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  it("accepts a cookie issued 1 second ago", () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-06-01T00:00:00.000Z"));
+    const cookie = signCookie(VALID_SID);
+
+    vi.setSystemTime(new Date("2026-06-01T00:00:01.000Z"));
+    expect(verifyCookie(cookie)).toBe(VALID_SID);
+  });
+
+  it("rejects a cookie one second past COOKIE_MAX_AGE_SECONDS", () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-01-01T00:00:00.000Z"));
+    const cookie = signCookie(VALID_SID);
+
+    // Advance time by exactly TTL + 1s — should be expired.
+    vi.setSystemTime(new Date((Date.now() + (COOKIE_MAX_AGE_SECONDS + 1) * 1000)));
+    expect(verifyCookie(cookie)).toBeNull();
+  });
+
+  it("rejects a cookie whose `iat` is in the far future (forged)", () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-06-01T00:00:00.000Z"));
+    const cookie = signCookie(VALID_SID);
+    const decoded = decodeCookie(cookie);
+    // Push iat 1 hour into the future; this requires regenerating the HMAC
+    // for the test to isolate the future-iat check from the sig-mismatch
+    // check — but we can't because env.SESSION_COOKIE_SECRET isn't exported.
+    // Instead we simply move system time backwards so the existing iat lands
+    // in the future relative to "now".
+    vi.setSystemTime(new Date("2026-05-31T22:00:00.000Z"));
+    expect(decoded.iat).toBeGreaterThan(Math.floor(Date.now() / 1000) + 60);
+    expect(verifyCookie(cookie)).toBeNull();
+  });
+
+  it("rejects a cookie missing `iat`", () => {
+    const cookie = signCookie(VALID_SID);
+    const decoded = decodeCookie(cookie);
+    const stripped = { sid: decoded.sid, sig: decoded.sig } as unknown as {
+      sid: string;
+      iat: number;
+      sig: string;
+    };
+    expect(verifyCookie(encodeCookie(stripped))).toBeNull();
+  });
+
+  it("rejects a cookie with non-integer `iat`", () => {
+    const cookie = signCookie(VALID_SID);
+    const decoded = decodeCookie(cookie);
+    decoded.iat = decoded.iat + 0.5;
+    expect(verifyCookie(encodeCookie(decoded))).toBeNull();
+  });
+
+  it("rejects a cookie whose `iat` was tampered after signing (HMAC mismatch)", () => {
+    const cookie = signCookie(VALID_SID);
+    const decoded = decodeCookie(cookie);
+    decoded.iat = decoded.iat - 10; // signed value differs; sig no longer valid
+    expect(verifyCookie(encodeCookie(decoded))).toBeNull();
   });
 });

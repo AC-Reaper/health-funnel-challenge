@@ -684,3 +684,85 @@ navigates to `/results` teaser; unlock navigates to `/pay`; `Pay $9.99`
 returns to `/results` full result with daily calories, predicted finish
 date, weekly curve, and algorithm version.
 Status: Resolved for preview deployment 2026-05-19.
+
+## review-007 B001: Production URL served pre-frontend placeholder
+
+Source: `reviews/review-007-browser-smoke.md`
+
+Resolved in:
+- Production deployment at `https://project-u415a.vercel.app/`
+
+Verification:
+Codex re-smoked the production URL on 2026-05-19 after the main deploy.
+The root page now loads the Day-4 landing UI with `Start the quiz`;
+no-cookie `/pay` redirects to `/`; the six-step quiz reaches `/results`
+teaser; unlock navigates to `/pay`; `Pay $9.99` returns to `/results`
+full result with daily calories, predicted finish date, weekly curve,
+and algorithm version.
+Status: Resolved 2026-05-19.
+
+## review-004-final I001: DB / architecture docs described pre-`step_event` schema
+
+Source: `reviews/review-004-final.md`
+
+Resolved in:
+- `docs/03-database-design.md` (5-table overview + step_event entry + Day-5 migration in runbook + sanity check `\dt` lists five tables)
+- `docs/02-architecture.md` first pass (header status flips to v2-current with ADR-014 note; ADR index gains ADR-014; §3 step_event reworded as shipped; §3 index notes; §7 Day-4 + Day-5 ✅; §8/§9 cleanup)
+- `docs/02-architecture.md` follow-up (review-004 re-review I004): §0 heading reads ADR-001…014; §3 schema bullets aligned with `prisma/schema.prisma` (`result.bmi decimal(5,2)`, `payment.idempotency_key varchar(128)`, `payment.currency char(3)`)
+
+Verification:
+`grep -n "four tables\|step_event.*defer\|step_event.*may ship\|step_event (optional\|ADR-001…013\|decimal(4,2)\|idempotency_key text\|currency text" docs/02-architecture.md docs/03-database-design.md` returns no matches inside live submission text. ADR-009 reads as Accepted-and-shipped throughout; ADR-014 listed alongside it.
+Status: Resolved 2026-05-19 on `feature/day5-hardening` (after the review-004 re-review I004 sweep).
+
+## review-004-final I002: API/auth doc stale after the cookie TTL change
+
+Source: `reviews/review-004-final.md`
+
+Resolved in:
+- `docs/04-api-design.md` Header / Authentication / cookie-jar block sections
+
+Verification:
+Header status reads "Current" referencing ADR-001…014. Authentication section documents `{sid, iat, sig}` payload, HMAC over `${sid}.${iat}`, 30-day server-side TTL with 60-second skew tolerance, and every `verifyCookie → null → 401 NO_SESSION` trigger. Reference to the fictional `lib/session.resolveCookie(req)` is replaced with `verifyCookie(cookies().get(COOKIE_NAME)?.value)`. The Postman-collection claim at the end of §cURL is removed in favour of the README cookie-jar walkthrough.
+Status: Resolved 2026-05-19 on `feature/day5-hardening`.
+
+## review-004-final I003: Final delivery docs/checklist were not submission-ready
+
+Source: `reviews/review-004-final.md`
+
+Resolved in:
+- `README.md` (ADR-001…013 → ADR-001…014; Day-3 row drops "awaits Codex re-review"; "Planned branches" list replaced with shipped-branch table including review file + merge commit)
+- `docs/07-delivery-checklist.md` (rewritten: removes the never-owned `00-product-research.md` / `01-requirements.md` / Postman / `npm run lint` rows with explicit "out of scope" notes; every shipped engineering / deploy / docs / review row marked ✅ with artefact path; review-004-final remains the only open review row)
+- `docs/02-architecture.md` follow-up (review-004 re-review I004): §1 MVP-scope row 6 no longer promises a Postman collection; new "Postman collection" row added to §9 "deliberately not doing"; §10 "Open follow-ups" rewritten as "None for the submitted MVP"; Day-1 historical note clarified to flag that ADR-014 was added on Day 5.
+
+Verification:
+`grep -n "Postman collection mirroring it\|Postman collection mirrors\|flesh out Prisma schema\|complete request/response/error contracts" docs/02-architecture.md docs/04-api-design.md README.md docs/07-delivery-checklist.md` returns no matches.
+Status: Resolved 2026-05-19 on `feature/day5-hardening` (after the review-004 re-review I004 sweep).
+
+## review-004-final N001: `step_event` write had no committed regression proof
+
+Source: `reviews/review-004-final.md`
+
+Resolved in:
+- `lib/step-repo.ts` (new) — `StepsTxOps` structural seam + pure `runStepsTransaction` + `buildStepsOpsFromTx` Prisma adapter + `persistStepPatch` production entry
+- `app/api/v1/sessions/me/steps/[stepKey]/route.ts` — calls `persistStepPatch` instead of an inline `db.$transaction`
+- `tests/lib/step-repo.test.ts` (new) — 3 cases against an `InMemoryStepsOps`: successful PATCH writes assessment + advances currentStep + appends step_event; weight step records both weightKg + targetWeightKg verbatim in valueJson; throw-on-upsert proves createStepEvent is never reached after the upsert fails.
+
+Verification:
+`npm test` reports 181 → 184. Same SubmitTxOps / PaymentTxOps pattern as review-006 B001; production call graph is byte-identical with the in-memory fakes — only the ops implementation differs.
+Status: Resolved 2026-05-19 on `feature/day5-hardening`.
+
+## review-004-final re-review I004: docs/02-architecture.md still had final-submission and schema drift
+
+Source: `reviews/review-004-final.md` Re-review section
+
+Resolved in:
+- `docs/02-architecture.md` §0 heading (`ADR-001…013` → `ADR-001…014`)
+- `docs/02-architecture.md` §1 MVP scope (Postman line reworded to "scoped out — cURL walkthrough is canonical")
+- `docs/02-architecture.md` §3 schema bullets aligned with `prisma/schema.prisma`: `result.bmi decimal(5,2)`, `payment.idempotency_key varchar(128)`, `payment.currency char(3)`
+- `docs/02-architecture.md` §7 Day-1 historical note rewritten to flag ADR-014 was added on Day 5
+- `docs/02-architecture.md` §9 "deliberately not doing" gains an explicit Postman row
+- `docs/02-architecture.md` §10 "Open follow-ups" replaced with "None for the submitted MVP"
+
+Verification:
+`grep -nE "ADR-001…013|Postman collection (mirroring|mirrors)|decimal\(4,2\)|idempotency_key text|currency text|flesh out Prisma schema|complete request/response/error contracts" docs/02-architecture.md` returns no matches inside live submission text. Re-review marked I001 / I003 as fully resolved alongside this fix.
+Status: Resolved 2026-05-19 on `feature/day5-hardening`.

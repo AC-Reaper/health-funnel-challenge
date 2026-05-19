@@ -2,12 +2,10 @@
 
 ## Status
 
-Open — 2026-05-19
+Resolved — 2026-05-19
 
-Preview deployment smoke passed on 2026-05-19 after Vercel protection was
-removed. The review remains Open only because the production alias
-`https://project-u415a.vercel.app/` was previously observed serving the
-old placeholder and has not yet been re-verified as the final public URL.
+Preview and production browser smokes both pass. No open Blocking,
+Important, or Nice-to-have findings remain for Day 4.
 
 Deployments reviewed:
 - `https://project-u415a.vercel.app/`
@@ -26,7 +24,7 @@ Verification run:
 - Cache-busted root load: `/?codex_smoke=<timestamp>`
 - DOM check for exact `Start the quiz` button/link
 
-## Overall Assessment
+## Initial Overall Assessment — Superseded
 
 The deployed URL is not serving the Day-4 funnel UI. It still shows the
 old placeholder page: "Server is up. The funnel UI lands in a later
@@ -39,6 +37,10 @@ implementation is broken. The local `feature/frontend-funnel` code does
 contain the landing CTA, `/funnel`, `/pay`, and `/results` pages, so the
 most likely issue is that Vercel production is still pointed at an older
 deployment or the wrong branch/commit.
+
+This initial assessment was superseded by the production re-smoke below:
+`https://project-u415a.vercel.app/` now serves the Day-4 UI and passes the
+full browser loop.
 
 ## Smoke Results
 
@@ -144,3 +146,40 @@ None.
 
 Nice-to-have:
 None.
+
+## Re-smoke — 2026-05-19 Production Deployment After Main Deploy
+
+Deployment reviewed: `https://project-u415a.vercel.app/`
+
+Verification run:
+- Browser opened `/` with no app session cookie: landing page loaded with
+  `Start the quiz`.
+- Browser opened `/pay` before creating a session: redirected back to `/`.
+- Browser clicked `Start the quiz`, selected `Female`, selected
+  `Lose weight ~0.5 kg / week deficit`, then continued through age `29`,
+  height `168`, current weight `80`, goal weight `70`, and activity
+  `Moderate`.
+- Browser clicked `See my plan`: app navigated to `/results` teaser with
+  `BMI 28.34 (overweight)` and `Unlock for 9.99 USD`.
+- Browser clicked unlock: app navigated to `/pay` with `Pay $9.99`.
+- Browser clicked `Pay $9.99`: app navigated back to `/results` full
+  result showing `Daily calorie target 1893 kcal`, predicted finish date
+  `2026-10-06`, weekly curve, and `Algorithm version: v1.0.0-mifflin`.
+
+Smoke results:
+
+| Path / action | Observed result | Expected result | Status |
+| - | - | - | - |
+| `/` before app session | Landing page with `Start the quiz` | Public landing page | Pass |
+| `/pay` before app session | Redirected to `/` | Redirect to `/` | Pass |
+| Six-step submit | Auto-navigated to `/results` teaser | Teaser result | Pass |
+| Teaser unlock | Navigated to `/pay` | Pay page | Pass |
+| Pay button | Returned to `/results` full result | Full paid result | Pass |
+
+Blocking update:
+- B001 is resolved. The production alias no longer serves the pre-frontend
+  placeholder and now passes the full browser smoke.
+- B002 was already resolved for the preview deployment.
+
+Final review-007 status:
+Resolved. No open Blocking, Important, or Nice-to-have findings remain.

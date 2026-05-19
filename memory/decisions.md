@@ -145,22 +145,41 @@ Consequences:
 - Slightly more server logic per PATCH (the prerequisite check).
 - Tests must cover out-of-order PATCH attempts.
 
-## ADR-009: `step_event` audit table — deferred
+## ADR-009: `step_event` audit table — deferred to Day 5, now Accepted
 
-Status: Accepted (2026-05-18)
+Status: Accepted (2026-05-18; expanded 2026-05-19 to ship a minimal version on Day 5)
 
 Context:
 An append-only `step_event` table is useful for funnel analytics and AI-collaboration storytelling, but is not graded by the brief. Codex review-001 §2 flagged it as scope risk for Day 1–3.
 
 Decision:
-Not in the Day-1 migration. Will be added in Day 5 only if the core loop is shippable and slack remains (T-502 optional).
+Day 5 (T-502 on `feature/day5-hardening`) ships a minimal version: `step_event(id, session_id, step_key, value_json, created_at)` written inside the same `db.$transaction` as the PATCH assessment write. No unique constraint — replays are valid audit data. FK CASCADE.
 
 Reason:
-`assessment.updated_at` + `session.current_step` already cover the resume story. Audit adds implementation surface without moving any scoring criterion.
+`assessment.updated_at` + `session.current_step` already cover the resume story, but a per-PATCH event log makes future analytics buildable without a backfill and provides a tamper-evident input cadence. Writing inside the same transaction guarantees the audit cannot disagree with the assessment.
 
 Consequences:
-- One fewer table to design, test, and document on Day 1.
-- If reintroduced, ships behind its own migration and is documented in `docs/03-database-design.md`.
+- One additional Prisma model + migration (`20260519000000_add_step_event`) + one extra INSERT inside the PATCH transaction.
+- `docs/03-database-design.md` adds the entity + Mermaid node.
+
+## ADR-014: Server-side cookie TTL via `iat` + 30d expiry
+
+Status: Accepted (2026-05-19, T-501 on `feature/day5-hardening`)
+
+Context:
+Day-1 cookie payload was `{sid, sig}`. Only the `Max-Age=30d` attribute on the `Set-Cookie` header bounded the lifetime, and that's purely client-side. A captured cookie value could be replayed against the server indefinitely. Day-5 hardening (T-501) called for closing this gap.
+
+Decision:
+Cookie payload becomes `{sid, iat, sig}` where `iat` is the issued-at timestamp in unix seconds. The HMAC commits to both `sid` and `iat` (`createHmac.update(\`${sid}.${iat}\`)`). `verifyCookie` rejects cookies where (a) `iat` is missing or not an integer, (b) `iat > now + 60s` (clock-skew tolerance), or (c) `now - iat > COOKIE_MAX_AGE_SECONDS` (30 days).
+
+Reason:
+- TTL must be enforced server-side or it isn't a TTL.
+- Including `iat` in the HMAC means the timestamp can't be tampered without invalidating the signature.
+- 60-second clock-skew tolerance keeps an NTP-synced fleet out of the false-reject branch.
+
+Consequences:
+- Pre-Day-5 prod cookies are rejected on first request after deploy; the landing CTA POSTs `/api/v1/sessions` to create a fresh cookie. No real users affected (5-day interview demo).
+- 6 new cases under `tests/lib/session.test.ts` "verifyCookie TTL".
 
 ## ADR-010: No pre-seeded paid `sessionId`
 

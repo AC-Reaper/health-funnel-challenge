@@ -4,7 +4,10 @@
 // Notes:
 //   - Anonymous sessions only (no `user` table, ADR-004).
 //   - Entitlement lives on `session` (no `subscription` table, ADR-007).
-//   - `step_event` is deferred (ADR-009) — not in this schema.
+//   - `step_event` is a minimal append-only audit table (ADR-009, T-502).
+//     Written inside the same transaction as the PATCH assessment write so
+//     analytics never see a step persisted to `assessment` without a row
+//     in `step_event`.
 //   - Validation is enforced in app code by Zod (ADR-005); the DB stores
 //     the data but does not duplicate boundary checks.
 
@@ -112,9 +115,27 @@ model Session {
   assessment Assessment?
   result     Result?
   payments   Payment[]
+  stepEvents StepEvent[]
 
   @@index([updatedAt])
   @@map("session")
+}
+
+/// Append-only audit row written on every successful PATCH
+/// `/sessions/me/steps/:stepKey`. No unique constraint — replays write
+/// additional rows so the audit reflects the user's input cadence.
+/// `valueJson` stores the parsed Zod body verbatim. ADR-009, T-502.
+model StepEvent {
+  id        String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  sessionId String   @map("session_id") @db.Uuid
+  stepKey   StepKey  @map("step_key")
+  valueJson Json     @map("value_json") @db.JsonB
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  session Session @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+
+  @@index([sessionId, createdAt])
+  @@map("step_event")
 }
 
 /// 1:1 with Session. Nullable columns are the partial-progress mechanism;
