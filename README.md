@@ -216,5 +216,6 @@ end user.
 - `docs/04-api-design.md` — endpoint contracts, error model.
 - `docs/03-database-design.md` — Prisma schema (Day 1).
 - `docs/05-ai-collaboration-log.md` — how Claude/Codex were used per phase.
+- `docs/08-security-hardening.md` — attack surface, existing controls, test proof table, out-of-scope.
 - `memory/decisions.md` — ADR log.
 - `memory/task-board.md` — live task tracker.

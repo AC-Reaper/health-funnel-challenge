@@ -50,6 +50,14 @@
   endpoints require the signed httpOnly cookie that browsers don't expose to
   JS, **and** SameSite=Lax blocks cross-site POSTs. Same-origin only for the
   demo.
+- **Same-origin guard** (`lib/api/same-origin.ts`): every mutating route
+  (POST /sessions, PATCH /steps/:stepKey, POST /submit, POST /pay) runs
+  `checkSameOrigin` before any cookie read. If the request carries an
+  `Origin` header, its host must match the receiving host
+  (`x-forwarded-host` is honoured for Vercel's proxy). Mismatch returns
+  `403 FORBIDDEN_ORIGIN`. Requests with no `Origin` pass through — this
+  carve-out keeps the README cookie-jar walkthrough and server-internal
+  Node fetch working. See `docs/08-security-hardening.md` §2.
 
 ## Versioning
 
@@ -84,7 +92,8 @@ All errors share one envelope, regardless of status code:
 | HTTP | `code` | When |
 | - | - | - |
 | 400 | `BAD_REQUEST` | Malformed JSON, missing required header, unknown step key. |
-| 401 | `NO_SESSION` | Missing / bad-signature cookie, or cookie points to a deleted session. |
+| 401 | `NO_SESSION` | Missing / bad-signature / expired cookie, or cookie points to a deleted session. |
+| 403 | `FORBIDDEN_ORIGIN` | `Origin` header present and does not match the receiving host. Sent only when `Origin` is set (cURL / server-internal fetch are unaffected). See `docs/08-security-hardening.md` §2. |
 | 404 | `NOT_FOUND` | Resource id is well-formed but does not exist. |
 | 409 | `STEP_OUT_OF_ORDER` | Step save would skip a required earlier step. |
 | 409 | `NOT_SUBMITTED` | Result requested before `/submit`. |
@@ -345,8 +354,14 @@ All errors share one envelope, regardless of status code:
 `POST /api/v1/pay`
 
 - **Auth**: cookie required.
-- **Required header**: `Idempotency-Key: <uuid-or-opaque-string-up-to-128-chars>`.
-  - Missing or empty → `400 BAD_REQUEST`.
+- **Required header**: `Idempotency-Key: <1-128 printable-ASCII chars>`.
+  - Schema: `lib/api/idempotency-key.ts` enforces `[\x20-\x7E]+`,
+    length 1-128. UUID v4, base64, hex, and short human-readable keys
+    all fit. Control characters, embedded newlines, and any non-ASCII
+    Unicode are rejected (log-poisoning vector + DB column is
+    `VARCHAR(128)` per ADR-006). See `docs/08-security-hardening.md` §2.
+  - Missing, empty, > 128 chars, or containing non-printable / non-ASCII
+    characters → `400 BAD_REQUEST`.
 - **Body**: `{}`. `amountCents`, `currency` are server constants and are
   rejected if provided.
 - **Behaviour** (single transaction):

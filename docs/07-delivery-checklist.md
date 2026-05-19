@@ -48,7 +48,18 @@ Out of scope for this delivery (skipped intentionally, not forgotten):
       `tests/lib/validation/assessment.test.ts`,
       `tests/lib/health/calculator.test.ts`)
 - [x] No `any` without justification; `tsc --noEmit` clean
-- [x] 181 vitest tests green
+- [x] 202 vitest tests green
+
+### Security
+
+- [x] Same-origin guard on every mutating route
+      (`lib/api/same-origin.ts`, 7 cases in
+      `tests/lib/api/same-origin.test.ts`)
+- [x] `Idempotency-Key` restricted to 1-128 printable-ASCII chars
+      (`lib/api/idempotency-key.ts`, 11 cases in
+      `tests/lib/api/idempotency-key.test.ts`)
+- [x] Security review at `docs/08-security-hardening.md` with attack
+      surface, control evidence table, and out-of-scope rationale
 
 ## Deploy / demo
 
@@ -73,8 +84,11 @@ duplicate it.
 - [x] `review-003-db.md` `Resolved`
 - [x] `review-006-day3.md` `Resolved`
 - [x] `review-007-browser-smoke.md` `Resolved`
-- [ ] `review-004-final.md` `Resolved` (no Blocking findings; Important
-      items in flight on `feature/day5-hardening`)
+- [x] `review-004-final.md` `Resolved` (no Blocking, Important, or
+      Nice-to-have findings remain; verified at `f2b37f8`)
+- [x] `review-008-frontend-polish.md` `Resolved` (verified at `c974fbb`)
+- [ ] `review-009-security-hardening.md` `Resolved` (awaits Codex on
+      `feature/security-hardening`)
 - [x] `reviews/resolved-review-items.md` covers every adopted finding
 
 ## Submission (Owner)
