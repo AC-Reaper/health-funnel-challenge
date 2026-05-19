@@ -168,6 +168,9 @@ All errors share one envelope, regardless of status code:
     `409 STEP_OUT_OF_ORDER` and include `firstMissingStep` in `fields`.
   - Editing a step that has already been saved is allowed (idempotent
     upsert).
+  - Every successful PATCH also writes a `step_event` audit row
+    (ADR-009, T-502) inside the same transaction, capturing the
+    validated body verbatim.
   - Cross-field check (weight × main_goal): if `mainGoal` is
     `lose_weight` then `targetWeightKg < weightKg`; if `gain_weight`
     then `>`; if `maintain` then within ±2kg. Violations →
