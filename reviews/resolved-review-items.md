@@ -684,3 +684,19 @@ navigates to `/results` teaser; unlock navigates to `/pay`; `Pay $9.99`
 returns to `/results` full result with daily calories, predicted finish
 date, weekly curve, and algorithm version.
 Status: Resolved for preview deployment 2026-05-19.
+
+## review-007 B001: Production URL served pre-frontend placeholder
+
+Source: `reviews/review-007-browser-smoke.md`
+
+Resolved in:
+- Production deployment at `https://project-u415a.vercel.app/`
+
+Verification:
+Codex re-smoked the production URL on 2026-05-19 after the main deploy.
+The root page now loads the Day-4 landing UI with `Start the quiz`;
+no-cookie `/pay` redirects to `/`; the six-step quiz reaches `/results`
+teaser; unlock navigates to `/pay`; `Pay $9.99` returns to `/results`
+full result with daily calories, predicted finish date, weekly curve,
+and algorithm version.
+Status: Resolved 2026-05-19.
