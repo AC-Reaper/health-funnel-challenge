@@ -2,11 +2,12 @@
 
 ## Status
 
-Open — 2026-05-19
+Resolved — 2026-05-20
 
 Branch reviewed: `feature/security-hardening`
 - Initial review: `d6e4c66`
 - Re-review: `adafa91`
+- Third re-review: `bcb4f2a`
 
 Preview reviewed:
 - `https://project-u415a-nvhyy1s1z-jackz1.vercel.app/`
@@ -35,6 +36,14 @@ Re-review verification at `adafa91`:
 - `git diff --check` — pass
 - `rg -n '\$queryRaw|\$executeRaw' app lib prisma tests --glob '!node_modules' --glob '!package-lock.json'` — returns one application/test callsite: `lib/payment.ts:183`
 
+Third re-review verification at `bcb4f2a`:
+- `npm run typecheck` — pass
+- `npm test` — pass, 206 tests
+- `npm run build` — pass
+- `npm run db:validate` — pass
+- `git diff --check` — pass
+- `rg -n '\$queryRaw|\$executeRaw' app lib prisma tests --glob '!node_modules' --glob '!package-lock.json'` — returns exactly one application/test callsite: `lib/payment.ts:183`
+
 Preview smoke:
 - `GET /api/v1/healthz` on the Preview URL returns `200`.
 - `POST /api/v1/sessions` with no `Origin` returns `200`, sets a secure
@@ -57,10 +66,10 @@ browser-origin mutation and header/log hygiene around `Idempotency-Key`.
 The helper tests are focused, and all four mutating routes now call
 `checkSameOrigin` before reading cookies or parsing body-specific state.
 
-I found no Blocking code issue. At `adafa91`, N001 is resolved by the
-scheme-aware forwarded-proto check and new tests. I001 is improved but still
-open: the SQL proof now correctly names the `/pay` raw lock query, but it
-also claims a `lib/db.ts` warm-up `$queryRaw` callsite that no longer exists.
+I found no Blocking code issue. At `adafa91`, N001 was resolved by the
+scheme-aware forwarded-proto check and new tests. At `bcb4f2a`, I001 is also
+resolved: the SQL proof in `docs/08` and the resolution log now match the
+actual repo surface exactly.
 
 ## Blocking
 
@@ -68,7 +77,7 @@ None.
 
 ## Important
 
-### I001 — Still open: `docs/08` SQL-injection proof table still contradicts the actual repo
+### I001 — Resolved: `docs/08` SQL-injection proof table matches the actual repo
 
 - Impact range: `docs/08-security-hardening.md` §2 and §3, the security
   evidence trail, `reviews/resolved-review-items.md`, and the
@@ -91,6 +100,13 @@ None.
   nonexistent `lib/db.ts` warm-up claim from `docs/08` and from
   `reviews/resolved-review-items.md`, or add a real warm-up call only if the
   app actually needs it. The better fix is docs-only.
+- Resolution: `bcb4f2a` updates `docs/08` §2 and §3 to say there is exactly
+  one `$queryRaw` callsite in app / lib / prisma / tests:
+  `lib/payment.ts:183`. The row explains that Prisma's tagged-template form
+  binds `${sessionId}` as a prepared-statement parameter and that the value
+  comes from `verifyCookie`, not the request body. The same corrected claim is
+  recorded in `reviews/resolved-review-items.md`, including a historical note
+  that the previous `lib/db.ts` warm-up claim was wrong.
 
 References:
 - `docs/08-security-hardening.md:45`
@@ -132,7 +148,5 @@ References:
 
 ## Recommendation
 
-Fix the remaining I001 docs-proof mismatch before merging. Once `docs/08`
-and `reviews/resolved-review-items.md` describe the actual raw SQL surface,
-this branch should be safe to merge from the security-hardening review
-perspective.
+`feature/security-hardening` is safe to merge from the security-hardening
+review perspective. No Blocking, Important, or Nice-to-have findings remain.
