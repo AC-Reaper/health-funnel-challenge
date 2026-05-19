@@ -668,3 +668,19 @@ Resolved in:
 Verification:
 Each doc now opens with a "keep this short" instruction explaining what belongs there vs not.
 Status: Resolved 2026-05-18.
+
+## review-007 B002: Preview deployment protected by Vercel login
+
+Source: `reviews/review-007-browser-smoke.md`
+
+Resolved in:
+- Vercel deployment configuration for `https://project-u415a-oafjf8eba-jackz1.vercel.app/` (Deployment Protection removed or bypassed)
+
+Verification:
+Codex re-smoked the preview URL on 2026-05-19. `/` loads the landing page
+with `Start the quiz`; no-cookie `/pay` redirects to `/`; an incomplete
+two-step session sees `Finish the quiz first`; completing all six steps
+navigates to `/results` teaser; unlock navigates to `/pay`; `Pay $9.99`
+returns to `/results` full result with daily calories, predicted finish
+date, weekly curve, and algorithm version.
+Status: Resolved for preview deployment 2026-05-19.
