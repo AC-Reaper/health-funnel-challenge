@@ -27,6 +27,7 @@ import {
 } from "@/lib/session";
 import { STEP_SCHEMAS, isStepKey } from "@/lib/validation/steps";
 
+import type { Prisma } from "@prisma/client";
 import type { z } from "zod";
 
 export const dynamic = "force-dynamic";
@@ -131,6 +132,9 @@ export async function PATCH(
     // commit as one transaction. Prisma @updatedAt on `session` refreshes
     // session.updated_at via the .update call, so the cached column and
     // the timestamp stay in sync with the assessment write.
+    //
+    // T-502 / ADR-009: append a `step_event` audit row inside the same
+    // transaction so the audit can never disagree with the assessment.
     const { freshSession, freshAssessment } = await db.$transaction(
       async (tx) => {
         const updatedAssessment = await upsertAssessmentField(
@@ -142,6 +146,13 @@ export async function PATCH(
         const updatedSession = await tx.session.update({
           where: { id: sid },
           data: { currentStep: computeCurrentStep(updatedAssessment) },
+        });
+        await tx.stepEvent.create({
+          data: {
+            sessionId: sid,
+            stepKey,
+            valueJson: patch as Prisma.InputJsonValue,
+          },
         });
         return {
           freshSession: updatedSession,
