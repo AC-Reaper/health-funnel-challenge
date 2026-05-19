@@ -23,12 +23,21 @@ export type PaymentAction =
   /** Same key against a not-yet-paid session (rare race). Flip + return existing. */
   | { type: "same_key_pre_paid"; existing: Payment }
   /** No prior row for this key. Insert + flip entitlement. */
-  | { type: "insert_and_flip" };
+  | { type: "insert_and_flip" }
+  /** Session has not been submitted yet — pay must come after submit. */
+  | { type: "not_submitted" };
 
 export function decidePaymentAction(
-  session: Pick<Session, "entitlementStatus">,
+  session: Pick<Session, "status" | "entitlementStatus">,
   existingForKey: Payment | null,
 ): PaymentAction {
+  // Submit must precede pay (review-010 P1). The /pay route enforces
+  // this at the API boundary with a 409 NOT_SUBMITTED envelope; this
+  // branch is the matching guard in the pure state machine so the
+  // orchestrator cannot accidentally mint a payment row against a
+  // draft session.
+  if (session.status !== "submitted") return { type: "not_submitted" };
+
   if (session.entitlementStatus === "paid") {
     return existingForKey
       ? { type: "same_key_replay", existing: existingForKey }
@@ -83,6 +92,14 @@ export async function runPaymentTransaction(
   const action = decidePaymentAction(session, existingForKey);
 
   switch (action.type) {
+    case "not_submitted":
+      // Defensive — the route gate should have rejected this already.
+      // Reaching here means the API layer regressed; surface as a 500
+      // with requestId via the route's try/catch envelope.
+      throw new Error(
+        `session ${sessionId} is not submitted; /pay should be gated upstream`,
+      );
+
     case "same_key_replay":
       return { session, payment: action.existing };
 

@@ -36,6 +36,18 @@ export async function POST(req: Request) {
     const session = await findSessionById(sid);
     if (!session) return noSession(requestId);
 
+    // Pay must come after submit (review-010 P1). The pure
+    // `decidePaymentAction` mirrors this gate for the state machine;
+    // the route holds the canonical API contract.
+    if (session.status !== "submitted") {
+      return jsonError({
+        status: 409,
+        code: ERROR_CODES.NOT_SUBMITTED,
+        message: "Submit the assessment before payment.",
+        requestId,
+      });
+    }
+
     const rawKey = req.headers.get("idempotency-key");
     const keyParsed = IDEMPOTENCY_KEY_SCHEMA.safeParse(rawKey);
     if (!keyParsed.success) {
