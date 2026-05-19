@@ -30,7 +30,7 @@ See `PROJECT_BRIEF.md` for the scoring criteria and MVP boundary, and
 | Payment | Fully mocked `POST /api/v1/pay` with `Idempotency-Key` | Brief asks for mock; replay-safe by DB unique constraint. |
 | Hosting | Vercel (app) + Supabase (DB) | Free tier; public HTTPS URL out of the box; no VPS required. |
 
-Full decision history lives in `memory/decisions.md` (ADR-001…013).
+Full decision history lives in `memory/decisions.md` (ADR-001…014).
 
 ## Status
 
@@ -46,24 +46,24 @@ review-007 verified the deployed browser flow.
 | - | - |
 | Day 1 | ✅ `package.json` + Prisma schema + first migration (`feature/db-schema`, merged). ✅ Next.js 14 App Router skeleton + `lib/session.ts` + first 3 endpoints (`feature/session-progress-api`, merged after live Supabase smoke). |
 | Day 2 | ✅ Zod step schemas + `PATCH /api/v1/sessions/me/steps/:stepKey` with first-incomplete-step + weight-coherence rules + vitest with 108 unit tests (`feature/funnel-persistence-api`, merged). |
-| Day 3 | ✅ Pure health calculator (`lib/health/calculator.ts`) + `POST /api/v1/sessions/me/submit` + two-serializer `GET /api/v1/results/me` (leak-tested) + mock `POST /api/v1/pay` with `Idempotency-Key` + minimal `/pay` and `/results` browser pages (`feature/assessment-result-api`, awaits Codex re-review of review-006 closeout). |
+| Day 3 | ✅ Pure health calculator (`lib/health/calculator.ts`) + `POST /api/v1/sessions/me/submit` + two-serializer `GET /api/v1/results/me` (leak-tested) + mock `POST /api/v1/pay` with `Idempotency-Key` + minimal `/pay` and `/results` browser pages (`feature/assessment-result-api`, merged after review-006 closeout). |
 | Day 4 | ✅ Polished funnel UI (`/funnel` server-bootstrapped stepper, Tailwind), `/pay` UX gate on `GET /results/me` (closes review-006 N003), `/results` restyle, Vercel + Supabase deploy, cookie-jar cURL walkthrough below (`feature/frontend-funnel`). |
 | Day 5 | ✅ Server-side cookie TTL (`iat` + 30d expiry), `step_event` minimal audit table (ADR-009 Accepted), schema diagram refreshed, AI collaboration log filled, Codex final review (`feature/day5-hardening`). |
 
 ## Code management
 
 Feature work branches from `main`; Claude implements, Codex reviews,
-Claude fixes adopted findings, then the branch merges back to `main`.
+Claude fixes adopted findings, then the branch merges back to `main`
+(`--no-ff`, ADR-011). Branches actually shipped, in order:
 
-Planned branches:
-
-- `feature/init-docs`
-- `feature/db-schema`
-- `feature/session-progress-api`
-- `feature/assessment-result-api`
-- `feature/pay-subscription`
-- `feature/frontend-funnel`
-- `feature/docs-delivery`
+| Branch | Day | Codex review | Merged |
+| - | - | - | - |
+| `feature/db-schema` | 1 | `review-003-db.md` | yes (`2a56382`) |
+| `feature/session-progress-api` | 1 | `review-002-api.md` (API surface) | yes (`0bda115`) |
+| `feature/funnel-persistence-api` | 2 | `review-002-api.md` (step-API surface) | yes |
+| `feature/assessment-result-api` | 3 | `review-006-day3.md` | yes (`e733831`) |
+| `feature/frontend-funnel` | 4 | `review-007-browser-smoke.md` | yes (`814b929`) |
+| `feature/day5-hardening` | 5 | `review-004-final.md` | pending re-review |
 
 Commit messages use Conventional Commits, for example
 `feat: implement anonymous session api` or
