@@ -100,6 +100,32 @@ on `payment(session_id) WHERE status='succeeded'` (Prisma cannot model
 partial indexes, so it lives in `migration.sql` only). It backstops
 ADR-012's "exactly one successful payment per session" invariant.
 
+## 2.1 Logical model mapping
+
+The challenge brief uses User / Subscription / Payment vocabulary. The
+shipped schema deliberately collapses it down to the minimum surface a
+5-day anonymous-funnel demo needs. Mapping below; rationale lives in
+the referenced ADRs.
+
+| Brief concept | Shipped representation | Decision |
+| - | - | - |
+| User | Anonymous `session` row + HMAC-signed httpOnly cookie | ADR-004 |
+| Account / login flow | Out of scope | ADR-004 |
+| Subscription / Entitlement | `session.entitlement_status` (`free` / `paid`) + `session.paid_at` | ADR-007 |
+| Recurring subscription billing cycle | Out of scope (one-time mock) | ADR-006 |
+| Payment record | `payment` table — DB `UNIQUE (session_id, idempotency_key)` + partial unique index `payment_one_success_per_session_idx WHERE status='succeeded'` | ADR-006, ADR-012 |
+| Step-progression audit | `step_event` (append-only, written inside the PATCH transaction) | ADR-009 |
+
+The collapse is intentional. The brief permits anonymous sessions and
+asks for a *mocked* payment, so a separate `user` table would add an
+auth surface that scores zero, and a separate `subscription` table
+would either duplicate `session.entitlement_status` or require a state
+machine for a non-existent billing cycle. The current shape preserves
+every scored behaviour (resume, idempotency, gated reads,
+replay-safety) with one fewer FK and one fewer migration than the
+brief's nominal data model — see `docs/02-architecture.md` §9
+"deliberately not doing".
+
 ## 3. Entities
 
 ### `session`

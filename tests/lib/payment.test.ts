@@ -30,13 +30,16 @@ describe("decidePaymentAction", () => {
   describe("session is already paid (ADR-012)", () => {
     it("same key with an existing payment → same_key_replay", () => {
       const p = fakePayment();
-      const action = decidePaymentAction({ entitlementStatus: "paid" }, p);
+      const action = decidePaymentAction(
+        { status: "submitted", entitlementStatus: "paid" },
+        p,
+      );
       expect(action).toEqual({ type: "same_key_replay", existing: p });
     });
 
     it("new key with no matching payment → already_paid_noop", () => {
       const action = decidePaymentAction(
-        { entitlementStatus: "paid" },
+        { status: "submitted", entitlementStatus: "paid" },
         null,
       );
       expect(action).toEqual({ type: "already_paid_noop" });
@@ -46,7 +49,7 @@ describe("decidePaymentAction", () => {
   describe("session is free (first-time pay)", () => {
     it("no existing payment for this key → insert_and_flip", () => {
       const action = decidePaymentAction(
-        { entitlementStatus: "free" },
+        { status: "submitted", entitlementStatus: "free" },
         null,
       );
       expect(action).toEqual({ type: "insert_and_flip" });
@@ -55,10 +58,41 @@ describe("decidePaymentAction", () => {
     it("an existing payment for this key (rare race) → same_key_pre_paid", () => {
       const p = fakePayment();
       const action = decidePaymentAction(
-        { entitlementStatus: "free" },
+        { status: "submitted", entitlementStatus: "free" },
         p,
       );
       expect(action).toEqual({ type: "same_key_pre_paid", existing: p });
+    });
+  });
+
+  // review-010 P1: submit must precede pay. The /pay route enforces a
+  // 409 NOT_SUBMITTED at the API boundary; the state machine returns
+  // `not_submitted` so the orchestrator cannot accidentally mint a
+  // payment row against a draft session.
+  describe("session not submitted", () => {
+    it("draft + free + no row → not_submitted", () => {
+      const action = decidePaymentAction(
+        { status: "draft", entitlementStatus: "free" },
+        null,
+      );
+      expect(action).toEqual({ type: "not_submitted" });
+    });
+
+    it("draft + free + existing row for same key → not_submitted (gate still wins)", () => {
+      const p = fakePayment();
+      const action = decidePaymentAction(
+        { status: "draft", entitlementStatus: "free" },
+        p,
+      );
+      expect(action).toEqual({ type: "not_submitted" });
+    });
+
+    it("draft + paid (impossible state) → not_submitted (defensive)", () => {
+      const action = decidePaymentAction(
+        { status: "draft", entitlementStatus: "paid" },
+        null,
+      );
+      expect(action).toEqual({ type: "not_submitted" });
     });
   });
 });
@@ -251,5 +285,18 @@ describe("runPaymentTransaction (review-006 B001)", () => {
     expect(racing.payments).toHaveLength(1);
     expect(outcome.payment.id).toBe(racing.payments[0]!.id);
     expect(outcome.session.entitlementStatus).toBe("paid");
+  });
+
+  // review-010 P1: defensive — the /pay route gate runs first, so a
+  // draft session never reaches the orchestrator in production. If
+  // both gates regress, the orchestrator must throw rather than mint
+  // a payment row against an unsubmitted session.
+  it("draft session bypasses the route gate → orchestrator throws (defensive)", async () => {
+    ops.seedSession(fakeSession({ status: "draft" }));
+    await expect(
+      runPaymentTransaction(ops, "sess_1", "key-a"),
+    ).rejects.toThrow(/not submitted/);
+    expect(ops.payments).toHaveLength(0);
+    expect(ops.sessions.get("sess_1")?.entitlementStatus).toBe("free");
   });
 });

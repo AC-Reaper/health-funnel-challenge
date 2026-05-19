@@ -85,19 +85,22 @@ payment.
 - Browser pages → `app/page.tsx`, `app/funnel/**`, `app/pay/{page,PayButton}.tsx`, `app/results/page.tsx`
 - Step audit → `step_event` model + `20260519000000_add_step_event`
   migration (ADR-009 accepted on Day 5)
-- Test suite → `tests/**` (vitest, 206 tests on `feature/security-hardening`)
+- Test suite → `tests/**` (vitest, 210 tests on `feature/delivery-compliance-hardening`)
 - ADR log → `memory/decisions.md` (ADR-001…014 Accepted)
 - Open questions → `memory/open-questions.md` (no open blocker)
-- Latest reviews → `reviews/review-009-security-hardening.md` (Resolved at `bcb4f2a`); `reviews/review-008-frontend-polish.md` (Resolved at `c974fbb`); `reviews/review-004-final.md` (Resolved at `f2b37f8`); `reviews/review-007-browser-smoke.md` (Resolved); `reviews/review-006-day3.md` (Resolved); `reviews/review-002-api.md` and `reviews/review-003-db.md` are resolved for earlier branches.
+- Latest reviews → `reviews/review-010-delivery-compliance.md` (Resolved at `a14b90f`); `reviews/review-009-security-hardening.md` (Resolved at `bcb4f2a`); `reviews/review-008-frontend-polish.md` (Resolved at `c974fbb`); `reviews/review-004-final.md` (Resolved at `f2b37f8`); `reviews/review-007-browser-smoke.md` (Resolved); `reviews/review-006-day3.md` (Resolved); `reviews/review-002-api.md` and `reviews/review-003-db.md` are resolved for earlier branches.
 
 ## Current Branch
 
-`feature/security-hardening` — post-MVP security branch. Ships
-`lib/api/same-origin.ts`, `lib/api/idempotency-key.ts`,
-`docs/08-security-hardening.md`, and 22 new tests (206 total). Codex
-third re-reviewed `bcb4f2a` on 2026-05-20: `typecheck`, 206 tests, build,
-`db:validate`, diff-check, and raw-query grep pass. review-009 I001 and N001
-are resolved; no open findings remain before merge.
+`feature/delivery-compliance-hardening` — final delivery-compliance
+branch. Ships the `/pay` submitted gate, README submission block + paid
+test cURL + email template, logical User/Subscription mapping in
+`docs/03`, `/pay` 409 docs, a full-result trust footer, and final
+checklist updates. Codex re-reviewed `a14b90f` on 2026-05-20:
+I001 and N001 are resolved; `typecheck`, 210 tests, build,
+`db:validate`, and diff-check pass. Initial review's live production
+paid-session cURL smoke remains valid. The branch is mergeable from
+the delivery-compliance review perspective.
 
 ## Code Management
 

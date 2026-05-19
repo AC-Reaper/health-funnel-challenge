@@ -28,7 +28,7 @@ see Done column.)
 
 ## In Progress
 
-(None.)
+None.
 
 ## Review
 
@@ -73,3 +73,4 @@ see Done column.)
 - 2026-05-19 — Claude + Codex — T-501 / T-502 / T-503 / T-504 / T-505 Day-5 hardening and final review closed on `feature/day5-hardening` at `f2b37f8`. Server-side cookie TTL, `step_event` audit table + transaction seam/tests, schema diagram, AI collaboration log, README/checklist cleanup, and `reviews/resolved-review-items.md` are all verified. Codex `reviews/review-004-final.md` is Resolved; `typecheck`, 184 tests, `db:validate`, and build pass.
 - 2026-05-19 — Claude + Codex — Post-MVP frontend polish re-review closed on `feature/frontend-polish` at `c974fbb`. I001 auto-advance error-state reset is verified fixed; `typecheck`, 184 tests, `db:validate`, build, and Preview smoke pass. `reviews/review-008-frontend-polish.md` is Resolved.
 - 2026-05-20 — Claude + Codex — Post-MVP security hardening review closed on `feature/security-hardening` at `bcb4f2a`. Same-origin guard, printable-ASCII `Idempotency-Key`, `docs/08-security-hardening.md`, and the SQL-injection proof table are verified. `typecheck`, 206 tests, `db:validate`, build, diff-check, and raw-query grep pass. `reviews/review-009-security-hardening.md` is Resolved.
+- 2026-05-20 — Claude + Codex — Delivery-compliance hardening re-review closed on `feature/delivery-compliance-hardening` at `a14b90f`. I001 stale checklist/README review state and N001 `docs/04` `fields` prose drift are resolved; `typecheck`, 210 tests, `db:validate`, build, and diff-check pass. `reviews/review-010-delivery-compliance.md` is Resolved.

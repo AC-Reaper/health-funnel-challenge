@@ -152,6 +152,11 @@ export default async function ResultsPage() {
           {JSON.stringify(data.result.curvePoints, null, 2)}
         </pre>
       </details>
+
+      <p className="mt-6 text-xs text-ink-500">
+        Simulated result based on your inputs. No real charge was made
+        — this is a 5-day interview demo.
+      </p>
     </main>
   );
 }
