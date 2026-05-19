@@ -615,12 +615,14 @@ Status: Resolved 2026-05-19.
 
 Source: `reviews/review-006-day3.md`
 
-Resolved in (deferred):
-- `memory/task-board.md` (linked to T-401 and T-402 on Day 4)
+Resolved in:
+- `app/pay/page.tsx` — server component now fetches `GET /api/v1/results/me` (cookie forwarded, `cache:"no-store"`) and branches: 404/401 → `redirect("/")` (dead cookie); 409 `NOT_SUBMITTED` → "Finish the quiz first" CTA back to `/funnel`; 200 `kind=teaser` → render pay CTA with price/currency sourced from `body.paywall`; 200 `kind=full` → `redirect("/results")`.
+- `app/pay/PayButton.tsx` — Tailwind restyle only; `Idempotency-Key` + `crypto.randomUUID()` logic unchanged.
+- `lib/internal-fetch.ts` — new helper (`internalUrl` + `forwardedCookieHeader`) used by both `/pay` and `/results` server pages to fetch our own API behind Vercel's proxy.
 
 Verification:
-Codex's own suggested fix targets the Day-4 funnel UI branch (`feature/frontend-funnel`). The `/pay` page is a Day-3 placeholder; the polished UX gate (no-session → `/`, not-submitted → "submit first" copy, submitted+free → pay CTA) lands when the full funnel UI lands. The API is the source of truth, so this is UX polish, not a security gap.
-Status: Deferred to T-401/T-402.
+Local manual smoke (deleted-session cookie → redirects to `/`; fresh session with no PATCH → "Finish the quiz first"; submitted free session → pay CTA; paid session → redirects to `/results`). `npm run typecheck`, `npm test` (175 tests), `npm run build` all pass on `feature/frontend-funnel`.
+Status: Resolved on `feature/frontend-funnel` (T-402).
 
 ## review-006 re-review: Day-3 fixes verified at 7b17949
 
@@ -666,3 +668,19 @@ Resolved in:
 Verification:
 Each doc now opens with a "keep this short" instruction explaining what belongs there vs not.
 Status: Resolved 2026-05-18.
+
+## review-007 B002: Preview deployment protected by Vercel login
+
+Source: `reviews/review-007-browser-smoke.md`
+
+Resolved in:
+- Vercel deployment configuration for `https://project-u415a-oafjf8eba-jackz1.vercel.app/` (Deployment Protection removed or bypassed)
+
+Verification:
+Codex re-smoked the preview URL on 2026-05-19. `/` loads the landing page
+with `Start the quiz`; no-cookie `/pay` redirects to `/`; an incomplete
+two-step session sees `Finish the quiz first`; completing all six steps
+navigates to `/results` teaser; unlock navigates to `/pay`; `Pay $9.99`
+returns to `/results` full result with daily calories, predicted finish
+date, weekly curve, and algorithm version.
+Status: Resolved for preview deployment 2026-05-19.

@@ -1,5 +1,7 @@
 import type { ReactNode } from "react";
 
+import "./globals.css";
+
 export const metadata = {
   title: "Health Funnel Challenge",
   description: "BetterMe-style health quiz funnel — 5-day challenge demo.",
@@ -8,14 +10,7 @@ export const metadata = {
 export default function RootLayout({ children }: { children: ReactNode }) {
   return (
     <html lang="en">
-      <body
-        style={{
-          fontFamily:
-            'system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif',
-          margin: 0,
-          padding: 0,
-        }}
-      >
+      <body className="min-h-screen bg-slate-50 text-ink-900 antialiased">
         {children}
       </body>
     </html>

@@ -40,31 +40,20 @@ export function PayButton({ priceLabel }: PayButtonProps) {
   }
 
   return (
-    <div style={{ marginTop: "1.5rem" }}>
+    <div className="mt-6">
       <button
         type="button"
         onClick={handlePay}
         disabled={status === "pending"}
-        style={{
-          padding: "0.75rem 1.5rem",
-          fontSize: "1rem",
-          background: status === "pending" ? "#94a3b8" : "#0f172a",
-          color: "white",
-          border: "none",
-          borderRadius: 6,
-          cursor: status === "pending" ? "not-allowed" : "pointer",
-        }}
+        className="w-full rounded-md bg-ink-900 px-5 py-3 text-white font-semibold text-base shadow-sm transition hover:bg-brand-700 disabled:bg-ink-300 disabled:cursor-not-allowed"
       >
         {status === "pending" ? "Processing…" : `Pay ${priceLabel}`}
       </button>
-      {error && (
-        <p
-          role="alert"
-          style={{ color: "#b91c1c", marginTop: "0.75rem", fontSize: "0.9rem" }}
-        >
+      {error ? (
+        <p role="alert" className="mt-3 text-sm text-red-700">
           {error}
         </p>
-      )}
+      ) : null}
     </div>
   );
 }

@@ -81,25 +81,26 @@ payment.
 - Serializers → `lib/serializers/result.ts` (teaser / full DTO types)
 - Payment → `lib/payment.ts` (pure `decidePaymentAction` + transactional `processPayment`)
 - Route handlers → `app/api/v1/{healthz,sessions,sessions/me,sessions/me/steps/[stepKey],sessions/me/submit,results/me,pay}/route.ts`
-- Browser pages → `app/page.tsx`, `app/pay/{page,PayButton}.tsx`, `app/results/page.tsx`
-- Test suite → `tests/**` (vitest, 160 tests)
+- Browser pages → `app/page.tsx`, `app/funnel/**`, `app/pay/{page,PayButton}.tsx`, `app/results/page.tsx`
+- Test suite → `tests/**` (vitest, 175 tests)
 - ADR log → `memory/decisions.md` (ADR-001…013 Accepted)
 - Open questions → `memory/open-questions.md` (no open blocker)
-- Latest reviews → `reviews/review-006-day3.md` (Resolved at `7b17949`; Day-3 submit/result/pay is mergeable); `reviews/review-002-api.md` and `reviews/review-003-db.md` are resolved for earlier branches.
+- Latest reviews → `reviews/review-007-browser-smoke.md` (Preview URL passes full browser smoke; review remains Open only because the production alias was previously stale and has not been re-verified as final URL); `reviews/review-006-day3.md` (Resolved at `7b17949`); `reviews/review-002-api.md` and `reviews/review-003-db.md` are resolved for earlier branches.
 
 ## Current Branch
 
-`feature/assessment-result-api` — Day-3 closed-loop core: pure health
-calculator, idempotent `POST /sessions/me/submit`, gated two-serializer
-`GET /results/me` (with leak invariant), mock `POST /api/v1/pay` with
-`Idempotency-Key` semantics (ADR-006 + ADR-012), and minimal `/pay` +
-`/results` browser pages. 160 unit tests, live cookie-jar smoke against
-Supabase covers 11 happy + sad paths. `feature/db-schema`,
-`feature/session-progress-api`, and `feature/funnel-persistence-api`
-are all merged into `main`. Codex reviewed the Day-3 surface in
-`reviews/review-006-day3.md` and re-reviewed closeout commit `7b17949`;
-no open Blocking/Important Day-3 findings remain, so the branch is
-mergeable.
+`feature/frontend-funnel` — Day-4 UI/deploy branch with Tailwind landing,
+server-bootstrapped `/funnel`, `/pay` readiness gate, `/results` restyle,
+and README deploy/browser walkthrough. Local branch head is `0a38880`.
+Codex browser-smoked `https://project-u415a.vercel.app/` and
+`https://project-u415a-oafjf8eba-jackz1.vercel.app/` on 2026-05-19.
+The preview URL now passes the full browser loop: no-cookie `/pay`
+redirects to `/`, incomplete sessions show `Finish the quiz first`, and
+quiz → teaser → `/pay` → full result works. `reviews/review-007-browser-smoke.md`
+remains Open only because the production alias was previously stale and
+has not been re-verified as the final submitted URL. `feature/db-schema`,
+`feature/session-progress-api`, `feature/funnel-persistence-api`, and
+`feature/assessment-result-api` are merged into `main`.
 
 ## Code Management
 

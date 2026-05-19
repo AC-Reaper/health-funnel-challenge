@@ -19,10 +19,9 @@ Owner is who does the work; reviews follow the AGENTS.md §5 flow.
 
 ### Day 4 — UI + deploy
 
-- T-401 — Claude — Funnel UI: one step per screen, progress bar, server-driven resume, sticky CTA, paywall modal
-- T-402 — Claude — `/pay` browser route, minimal mock payment form calling `POST /api/v1/pay`
-- T-403 — Claude + Owner (env vars) — Deploy to Vercel + Supabase; verify cookie-jar cURL against prod
-- T-404 — Claude — README: 60-second setup, env table, full cookie-jar cURL walkthrough, Postman collection link
+(All code surfaces shipped on `feature/frontend-funnel`; see Review column.
+T-403 deploy still requires Owner to provision Vercel env vars and run
+`npm run db:deploy` against `DIRECT_URL`.)
 
 ### Day 5 — Hardening + final review
 
@@ -34,9 +33,11 @@ Owner is who does the work; reviews follow the AGENTS.md §5 flow.
 
 ## In Progress
 
-- None
+- None.
 
 ## Review
+
+- T-401 / T-402 / T-403 / T-404 — Claude + Owner — `feature/frontend-funnel` shipped Day-4 UI + deploy + cookie-jar walkthrough. New files: `tailwind.config.ts`, `postcss.config.js`, `app/globals.css`, `app/funnel/{page,FunnelStepper,ProgressBar}.tsx`, `app/funnel/lib/patchStep.ts`, `app/funnel/steps/Step{Shell,Gender,MainGoal,Age,Height,Weight,Activity}.tsx`, `app/StartFunnelButton.tsx`, `lib/internal-fetch.ts`. Modified: `app/layout.tsx`, `app/page.tsx`, `app/pay/{page,PayButton}.tsx` (review-006 N003), `app/results/page.tsx`, `README.md`. Five Conventional Commits. 175 tests green; `tsc --noEmit` + `npm run build` clean (10 routes). **Live verification**: Vercel project provisioned at `https://project-u415a.vercel.app/` (production tracks `main`) and `https://project-u415a-oafjf8eba-jackz1.vercel.app/` (preview tracks `feature/frontend-funnel`); SESSION_COOKIE_SECRET rotated for prod; API-level cookie-jar walkthrough green on production URL (8/8 README steps incl. `Set-Cookie Secure; HttpOnly; SameSite=Lax`, leak invariant, ADR-012 new-key silent no-op). Codex browser-smoked the preview URL end-to-end in `reviews/review-007-browser-smoke.md` after Owner disabled Vercel Deployment Protection for Preview (B002 resolved). Review-007 remains Open only on B001 (production alias still serves the pre-Day-4 placeholder) — this resolves the moment `feature/frontend-funnel` merges into `main` and Vercel rebuilds production. Awaiting Owner go-ahead to merge.
 
 - T-301 / T-302 / T-303 / T-304 — Claude — `feature/assessment-result-api` shipped + review-006 findings addressed (B001 / I001 / I002 / N001 / N002; N003 deferred to Day 4). New files: `lib/health/calculator.ts` (pure, versioned `v1.0.0-mifflin`), `lib/validation/assessment.ts` (composed FULL_ASSESSMENT_SCHEMA), `lib/result-repo.ts` (idempotent submit transaction + P2002 race recovery), `lib/serializers/result.ts` (separate `TeaserResultDTO` / `FullResultDTO` types + leak-tested), `lib/payment.ts` (pure `decidePaymentAction` + transactional `processPayment` covering ADR-006 same-key replay + ADR-012 already-paid no-op + free→paid insert+flip), `app/api/v1/sessions/me/submit/route.ts`, `app/api/v1/results/me/route.ts`, `app/api/v1/pay/route.ts`, `app/pay/{page,PayButton}.tsx`, `app/results/page.tsx`. Tests: `tests/lib/health/calculator.test.ts`, `tests/lib/validation/assessment.test.ts`, `tests/lib/serializers/result.test.ts` (leak invariant), `tests/lib/payment.test.ts`. 108 → 160 tests, all green. `tsc --noEmit` + `next build` clean (9 routes total). Live cookie-jar smoke against Supabase: 11 paths green incl. `/submit` idempotent (same `resultId` on replay), `/results/me` teaser → JSON missing every paid field name, `/results/me` 409 `NOT_SUBMITTED` before submit, `/pay` 400 without `Idempotency-Key`, same-key replay returns same `paymentId`, new-key against paid silently no-ops (Prisma `payment.findMany` shows exactly one row). Awaits Codex review of the Day-3 surface before merge to `main`.
 

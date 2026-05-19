@@ -1,6 +1,8 @@
-import { cookies, headers } from "next/headers";
+import Link from "next/link";
+import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 
+import { forwardedCookieHeader, internalUrl } from "@/lib/internal-fetch";
 import {
   type FullResultDTO,
   type TeaserResultDTO,
@@ -14,17 +16,8 @@ type ResultsResponse = TeaserResultDTO | FullResultDTO;
 async function fetchResults(): Promise<
   { ok: true; data: ResultsResponse } | { ok: false; status: number; code?: string }
 > {
-  const host = headers().get("host");
-  const protocol =
-    headers().get("x-forwarded-proto") ??
-    (process.env.NODE_ENV === "production" ? "https" : "http");
-  const cookieHeader = cookies()
-    .getAll()
-    .map((c) => `${c.name}=${c.value}`)
-    .join("; ");
-
-  const res = await fetch(`${protocol}://${host}/api/v1/results/me`, {
-    headers: { cookie: cookieHeader },
+  const res = await fetch(internalUrl("/api/v1/results/me"), {
+    headers: { cookie: forwardedCookieHeader() },
     cache: "no-store",
   });
   if (!res.ok) {
@@ -41,18 +34,27 @@ export default async function ResultsPage() {
   if (!sid) redirect("/");
 
   const response = await fetchResults();
+
   if (!response.ok) {
+    if (response.status === 404) redirect("/");
+
+    const isNotSubmitted = response.code === "NOT_SUBMITTED";
     return (
-      <main style={{ maxWidth: 480, margin: "10vh auto", padding: "0 1.5rem" }}>
-        <h1>Results unavailable</h1>
-        <p style={{ color: "#444" }}>
-          {response.code === "NOT_SUBMITTED"
-            ? "Finish the funnel and submit before viewing results."
+      <main className="mx-auto max-w-md px-4 py-16">
+        <h1 className="text-2xl font-semibold text-ink-900">
+          {isNotSubmitted ? "Finish the quiz first" : "Results unavailable"}
+        </h1>
+        <p className="mt-3 text-ink-700">
+          {isNotSubmitted
+            ? "Submit your answers before viewing the plan."
             : `Server returned ${response.status}.`}
         </p>
-        <p>
-          <a href="/">Back home</a>
-        </p>
+        <Link
+          href={isNotSubmitted ? "/funnel" : "/"}
+          className="mt-6 inline-block rounded-md bg-ink-900 px-5 py-3 text-white font-medium shadow-sm transition hover:bg-brand-700"
+        >
+          {isNotSubmitted ? "Continue the quiz" : "Back home"}
+        </Link>
       </main>
     );
   }
@@ -60,73 +62,72 @@ export default async function ResultsPage() {
   const { data } = response;
 
   return (
-    <main style={{ maxWidth: 640, margin: "8vh auto", padding: "0 1.5rem" }}>
-      <p
-        style={{
-          color: "#92400e",
-          background: "#fffbeb",
-          padding: "0.5rem 0.75rem",
-          borderRadius: 6,
-          fontSize: "0.875rem",
-          marginBottom: "1rem",
-        }}
-      >
-        Day-3 placeholder. The polished funnel + results UI ships on
-        Day 4 (T-401).
-      </p>
-
-      <h1 style={{ fontSize: "1.75rem" }}>
-        Your starting point: BMI {data.result.bmi} ({data.result.bmiCategory})
-      </h1>
+    <main className="mx-auto max-w-2xl px-4 py-12 sm:py-16 space-y-8">
+      <header className="space-y-2">
+        <p className="text-xs font-medium uppercase tracking-wider text-brand-700">
+          Your starting point
+        </p>
+        <h1 className="text-3xl font-bold text-ink-900 sm:text-4xl">
+          BMI {data.result.bmi}{" "}
+          <span className="text-ink-500 font-normal text-2xl">
+            ({data.result.bmiCategory})
+          </span>
+        </h1>
+      </header>
 
       {data.kind === "teaser" ? (
-        <section>
-          <p style={{ color: "#444" }}>{data.result.headline}</p>
-          <a
+        <section className="rounded-2xl bg-white shadow-sm ring-1 ring-ink-300/40 p-6 sm:p-8">
+          <p className="text-ink-700">{data.result.headline}</p>
+          <Link
             href={data.paywall.ctaHref}
-            style={{
-              display: "inline-block",
-              marginTop: "1rem",
-              padding: "0.75rem 1.5rem",
-              background: "#0f172a",
-              color: "white",
-              borderRadius: 6,
-              textDecoration: "none",
-            }}
+            className="mt-6 inline-block rounded-md bg-ink-900 px-6 py-3 text-white font-semibold shadow-sm transition hover:bg-brand-700"
           >
             Unlock for {(data.paywall.priceCents / 100).toFixed(2)}{" "}
             {data.paywall.currency}
-          </a>
+          </Link>
         </section>
       ) : (
-        <section>
-          <p>
-            Daily target: <strong>{data.result.dailyCaloriesKcal} kcal</strong>
-          </p>
-          {data.result.predictedTargetDate ? (
-            <p>
-              Predicted target date:{" "}
-              <strong>{data.result.predictedTargetDate}</strong>
+        <section className="space-y-6">
+          <div className="rounded-2xl bg-white shadow-sm ring-1 ring-ink-300/40 p-6 sm:p-8">
+            <p className="text-sm text-ink-500">Daily calorie target</p>
+            <p className="mt-1 text-3xl font-semibold text-ink-900">
+              {data.result.dailyCaloriesKcal}{" "}
+              <span className="text-base font-normal text-ink-500">kcal</span>
             </p>
-          ) : (
-            <p style={{ color: "#92400e" }}>
-              Your goal is outside the safe planning range — consider
-              consulting a professional.
-            </p>
-          )}
-          <details>
-            <summary>Weekly curve ({data.result.curvePoints.length} points)</summary>
-            <pre style={{ fontSize: "0.85rem" }}>
+            {data.result.predictedTargetDate ? (
+              <p className="mt-4 text-ink-700">
+                Predicted finish date:{" "}
+                <strong className="text-ink-900">
+                  {data.result.predictedTargetDate}
+                </strong>
+              </p>
+            ) : (
+              <p className="mt-4 rounded-md bg-amber-50 border border-amber-200 px-3 py-2 text-sm text-amber-800">
+                Your goal sits outside our safe planning range — consider
+                consulting a healthcare professional.
+              </p>
+            )}
+          </div>
+
+          <div className="rounded-2xl bg-white shadow-sm ring-1 ring-ink-300/40 p-6 sm:p-8">
+            <p className="text-ink-700">{data.result.plan.summary}</p>
+            {data.result.plan.note === "consult_professional" ? (
+              <p className="mt-3 text-sm text-amber-800">
+                Note: please consult a healthcare professional.
+              </p>
+            ) : null}
+          </div>
+
+          <details className="rounded-2xl bg-white shadow-sm ring-1 ring-ink-300/40 p-6 sm:p-8 group">
+            <summary className="cursor-pointer text-sm font-medium text-ink-700">
+              Weekly curve ({data.result.curvePoints.length} points)
+            </summary>
+            <pre className="mt-3 overflow-x-auto text-xs text-ink-700 bg-slate-50 p-3 rounded">
               {JSON.stringify(data.result.curvePoints, null, 2)}
             </pre>
           </details>
-          <p style={{ color: "#444" }}>{data.result.plan.summary}</p>
-          {data.result.plan.note === "consult_professional" && (
-            <p style={{ color: "#92400e" }}>
-              Note: please consult a healthcare professional.
-            </p>
-          )}
-          <p style={{ color: "#888", fontSize: "0.8rem" }}>
+
+          <p className="text-xs text-ink-500">
             Algorithm version: {data.result.algorithmVersion}
           </p>
         </section>
