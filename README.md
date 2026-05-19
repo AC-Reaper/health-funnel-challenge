@@ -6,6 +6,20 @@ result gate. Optimised for the four things the brief grades — API design,
 DB modelling, end-to-end loop correctness, and AI collaboration — not for
 UI fidelity.
 
+## Submission info
+
+| | |
+| - | - |
+| **Live demo** | https://project-u415a.vercel.app/ |
+| **Source** | https://github.com/AC-Reaper/health-funnel-challenge |
+| **API design** | [`docs/04-api-design.md`](docs/04-api-design.md) |
+| **DB design + ER diagram** | [`docs/03-database-design.md`](docs/03-database-design.md) |
+| **AI collaboration log** | [`docs/05-ai-collaboration-log.md`](docs/05-ai-collaboration-log.md) |
+| **Security review** | [`docs/08-security-hardening.md`](docs/08-security-hardening.md) |
+
+Want a working paid session against the live URL in ~30 seconds? Jump
+to [§Paid test session](#paid-test-session) below.
+
 ## Project goal
 
 Deliver a public, end-to-end demo where a visitor can complete a 6-step
@@ -34,11 +48,11 @@ Full decision history lives in `memory/decisions.md` (ADR-001…014).
 
 ## Status
 
-Day 1–5 features shipped. Full funnel loop runs end-to-end against
-Supabase: anonymous session → 6-step browser quiz → submit → calculator
-→ gated teaser → mock `/pay` → full result. 181 unit tests green; live
-cookie-jar smoke covers happy + sad paths for every endpoint; Codex
-review-007 verified the deployed browser flow.
+Day 1–5 features shipped + delivery-compliance hardening. Full funnel
+loop runs end-to-end against Supabase: anonymous session → 6-step
+browser quiz → submit → calculator → gated teaser → mock `/pay` → full
+result. 210 unit tests green; live cookie-jar smoke covers happy + sad
+paths for every endpoint; ten Codex reviews (000…009) Resolved.
 
 ## To be added (in implementation order)
 
@@ -63,7 +77,9 @@ Claude fixes adopted findings, then the branch merges back to `main`
 | `feature/funnel-persistence-api` | 2 | `review-002-api.md` (step-API surface) | yes |
 | `feature/assessment-result-api` | 3 | `review-006-day3.md` | yes (`e733831`) |
 | `feature/frontend-funnel` | 4 | `review-007-browser-smoke.md` | yes (`814b929`) |
-| `feature/day5-hardening` | 5 | `review-004-final.md` | pending re-review |
+| `feature/day5-hardening` | 5 | `review-004-final.md` | yes |
+| `feature/frontend-polish` | post-MVP | `review-008-frontend-polish.md` | yes (`24e4fbc`) |
+| `feature/security-hardening` | post-MVP | `review-009-security-hardening.md` | yes (`d6d5b1c`) |
 
 Commit messages use Conventional Commits, for example
 `feat: implement anonymous session api` or
@@ -97,7 +113,7 @@ npm run dev   # http://localhost:3000
 | `npm run build` | `prisma generate` + `next build` (used on Vercel) |
 | `npm run start` | Production server (after `npm run build`) |
 | `npm run typecheck` | `tsc --noEmit` |
-| `npm test` | Vitest, 181 unit tests |
+| `npm test` | Vitest, 210 unit tests |
 | `npm run db:deploy` | `prisma migrate deploy` against `DIRECT_URL` |
 
 Node 20 LTS is pinned via `.nvmrc`.
@@ -185,6 +201,65 @@ Browser path (same flow, polished UI): visit `$BASE/`, click **Start the
 quiz**, complete six steps, hit **Pay**, land on the full plan at
 `$BASE/results`.
 
+## Paid test session
+
+Reproduces a paid session against `$BASE` end-to-end. Same flow as the
+8-step block above, condensed for copy-paste. The brief asks for a
+`sessionId` that an evaluator can verify — this block prints it after
+the pay step. Set `$BASE` first:
+
+```bash
+BASE="https://project-u415a.vercel.app"   # or http://localhost:3000
+JAR="$(mktemp)"
+
+# 1. Anonymous session (Set-Cookie hfc_session)
+curl -sS -c "$JAR" -b "$JAR" -X POST "$BASE/api/v1/sessions" \
+  -H 'Content-Type: application/json' -d '{}' > /dev/null
+
+# 2. Six steps (gender → main_goal → age → height → weight → activity)
+for body in \
+  '{"stepKey":"gender","body":{"gender":"female"}}' \
+  '{"stepKey":"main_goal","body":{"mainGoal":"lose_weight"}}' \
+  '{"stepKey":"age","body":{"ageYears":29}}' \
+  '{"stepKey":"height","body":{"heightCm":168}}' \
+  '{"stepKey":"weight","body":{"weightKg":80,"targetWeightKg":70}}' \
+  '{"stepKey":"activity","body":{"activityLevel":"moderate"}}'
+do
+  step=$(echo "$body" | jq -r .stepKey)
+  payload=$(echo "$body" | jq -c .body)
+  curl -sS -b "$JAR" -X PATCH "$BASE/api/v1/sessions/me/steps/$step" \
+    -H 'Content-Type: application/json' -d "$payload" > /dev/null
+done
+
+# 3. Submit
+curl -sS -b "$JAR" -X POST "$BASE/api/v1/sessions/me/submit" \
+  -H 'Content-Type: application/json' -d '{}' > /dev/null
+
+# 4. Pay (prints sessionId + paymentId)
+KEY=$(uuidgen)
+curl -sS -b "$JAR" -X POST "$BASE/api/v1/pay" \
+  -H 'Content-Type: application/json' -H "Idempotency-Key: $KEY" -d '{}' \
+  | jq '{sessionId, paymentId, entitlementStatus}'
+
+# 5. Read the paid full result
+curl -sS -b "$JAR" "$BASE/api/v1/results/me" | jq
+```
+
+**On the auth model.** The `sessionId` printed above identifies the
+row; it is **not** an auth credential. The system uses a signed
+httpOnly cookie — every request in the block carries it via the
+shared `$JAR`. Hitting any endpoint with the bare `sessionId` and no
+cookie returns `401 NO_SESSION`:
+
+```bash
+curl -sS "$BASE/api/v1/sessions/me"   # no -b "$JAR"
+# → {"error":{"code":"NO_SESSION", ...}}
+```
+
+See [`docs/04-api-design.md`](docs/04-api-design.md) §Authentication
+and [`docs/08-security-hardening.md`](docs/08-security-hardening.md) §2
+for the HMAC + iat TTL + same-origin guard design.
+
 ## Edge cases verified (T-501)
 
 Six failure / replay paths the brief calls out, each pinned to the
@@ -219,3 +294,36 @@ end user.
 - `docs/08-security-hardening.md` — attack surface, existing controls, test proof table, out-of-scope.
 - `memory/decisions.md` — ADR log.
 - `memory/task-board.md` — live task tracker.
+
+## Submission email template
+
+```
+To: yitengruntu12123@gmail.com, alex@arkon-tech.com, rip@arkon-tech.com
+Subject: 【姓名】_全栈挑战_20260520
+
+各位老师好，
+
+提交全栈挑战的最终交付，重点信息如下：
+
+• 在线 demo:   https://project-u415a.vercel.app/
+• 源码:        https://github.com/AC-Reaper/health-funnel-challenge
+• API 文档:    docs/04-api-design.md
+• DB 设计:     docs/03-database-design.md
+• 安全审阅:    docs/08-security-hardening.md
+• AI 协作记录: docs/05-ai-collaboration-log.md
+
+README 顶部的「Submission info」+「Demo path」可以一次性走完六步、
+完成 mock 支付、看到 full result。如果只想直接复现一个 paid
+sessionId，复制 README §Paid test session 的 cURL 段落即可
+（脚本会输出 sessionId / paymentId / entitlementStatus）。
+
+技术摘要：
+• Next.js 14 App Router + TypeScript + Zod + Prisma + Postgres
+  (Supabase) + Vercel.
+• 匿名 session、HMAC-signed httpOnly cookie、server-side TTL。
+• 7 个 /api/v1 路由，全部 Zod 校验。
+• 210 个 vitest 单元 + 10 轮 Codex 评审全部 Resolved。
+• 评审记录: docs/06-review-log.md。
+
+期待反馈。
+```
