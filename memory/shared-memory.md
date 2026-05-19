@@ -3,9 +3,9 @@
 ## Current Project
 
 Health quiz funnel full-stack challenge for Ruiqi Technology (睿迄科技).
-5-day delivery. MVP is merged to `main`; post-MVP frontend polish is
-review-resolved on `feature/frontend-polish` at `c974fbb`. ADR-001…014 are
-Accepted.
+5-day delivery. MVP is merged to `main`; post-MVP security hardening is
+review-resolved on `feature/security-hardening` at `bcb4f2a`. ADR-001…014
+are Accepted.
 
 ## Final Goal
 
@@ -85,19 +85,19 @@ payment.
 - Browser pages → `app/page.tsx`, `app/funnel/**`, `app/pay/{page,PayButton}.tsx`, `app/results/page.tsx`
 - Step audit → `step_event` model + `20260519000000_add_step_event`
   migration (ADR-009 accepted on Day 5)
-- Test suite → `tests/**` (vitest, 184 tests)
+- Test suite → `tests/**` (vitest, 206 tests on `feature/security-hardening`)
 - ADR log → `memory/decisions.md` (ADR-001…014 Accepted)
 - Open questions → `memory/open-questions.md` (no open blocker)
-- Latest reviews → `reviews/review-008-frontend-polish.md` (Resolved at `c974fbb`); `reviews/review-004-final.md` (Resolved at `f2b37f8`); `reviews/review-007-browser-smoke.md` (Resolved); `reviews/review-006-day3.md` (Resolved); `reviews/review-002-api.md` and `reviews/review-003-db.md` are resolved for earlier branches.
+- Latest reviews → `reviews/review-009-security-hardening.md` (Resolved at `bcb4f2a`); `reviews/review-008-frontend-polish.md` (Resolved at `c974fbb`); `reviews/review-004-final.md` (Resolved at `f2b37f8`); `reviews/review-007-browser-smoke.md` (Resolved); `reviews/review-006-day3.md` (Resolved); `reviews/review-002-api.md` and `reviews/review-003-db.md` are resolved for earlier branches.
 
 ## Current Branch
 
-`feature/frontend-polish` — post-MVP UI-only branch. Ships single-choice
-auto-advance with 250ms confirm flash, client-only `viewStep` editing,
-`LockedPreview`, report-style full results, and pay-page polish. Codex
-re-reviewed `c974fbb` on 2026-05-19: `typecheck`, 184 tests, build,
-`db:validate`, and Preview smoke pass. review-008 I001 is resolved; no open
-findings remain before merge.
+`feature/security-hardening` — post-MVP security branch. Ships
+`lib/api/same-origin.ts`, `lib/api/idempotency-key.ts`,
+`docs/08-security-hardening.md`, and 22 new tests (206 total). Codex
+third re-reviewed `bcb4f2a` on 2026-05-20: `typecheck`, 206 tests, build,
+`db:validate`, diff-check, and raw-query grep pass. review-009 I001 and N001
+are resolved; no open findings remain before merge.
 
 ## Code Management
 

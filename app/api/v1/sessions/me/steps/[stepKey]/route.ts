@@ -9,6 +9,7 @@ import {
 } from "@/lib/api/errors";
 import { parseJsonBody } from "@/lib/api/parse-body";
 import { getRequestId } from "@/lib/api/request-id";
+import { checkSameOrigin } from "@/lib/api/same-origin";
 import {
   checkMainGoalChange,
   checkWeightCoherence,
@@ -35,6 +36,9 @@ export async function PATCH(
   { params }: { params: { stepKey: string } },
 ) {
   const requestId = getRequestId(req);
+
+  const originCheck = checkSameOrigin(req, requestId);
+  if (!originCheck.ok) return originCheck.res;
 
   try {
     const sid = verifyCookie(cookies().get(COOKIE_NAME)?.value);

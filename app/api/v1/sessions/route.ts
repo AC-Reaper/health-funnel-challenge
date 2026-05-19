@@ -5,6 +5,7 @@ import { z } from "zod";
 import { internalError } from "@/lib/api/errors";
 import { parseJsonBody } from "@/lib/api/parse-body";
 import { getRequestId } from "@/lib/api/request-id";
+import { checkSameOrigin } from "@/lib/api/same-origin";
 import {
   COOKIE_NAME,
   buildSetCookieHeader,
@@ -26,6 +27,9 @@ const PostSessionsBody = z.object({}).strict();
 
 export async function POST(req: Request) {
   const requestId = getRequestId(req);
+
+  const originCheck = checkSameOrigin(req, requestId);
+  if (!originCheck.ok) return originCheck.res;
 
   try {
     const parsed = await parseJsonBody(req, PostSessionsBody, requestId);
