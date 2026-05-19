@@ -700,3 +700,51 @@ teaser; unlock navigates to `/pay`; `Pay $9.99` returns to `/results`
 full result with daily calories, predicted finish date, weekly curve,
 and algorithm version.
 Status: Resolved 2026-05-19.
+
+## review-004-final I001: DB / architecture docs described pre-`step_event` schema
+
+Source: `reviews/review-004-final.md`
+
+Resolved in:
+- `docs/03-database-design.md` (5-table overview + step_event entry + Day-5 migration in runbook + sanity check `\dt` lists five tables)
+- `docs/02-architecture.md` (header status flips to v2-current with ADR-014 note; ADR index gains ADR-014; §3 step_event reworded as shipped; §3 index notes; §7 Day-4 + Day-5 ✅; §8/§9 cleanup)
+
+Verification:
+`grep -n "four tables\|step_event.*defer\|step_event.*may ship\|step_event (optional" docs/02-architecture.md docs/03-database-design.md` returns no matches. ADR-009 reads as Accepted-and-shipped throughout; ADR-014 listed alongside it.
+Status: Resolved 2026-05-19 on `feature/day5-hardening`.
+
+## review-004-final I002: API/auth doc stale after the cookie TTL change
+
+Source: `reviews/review-004-final.md`
+
+Resolved in:
+- `docs/04-api-design.md` Header / Authentication / cookie-jar block sections
+
+Verification:
+Header status reads "Current" referencing ADR-001…014. Authentication section documents `{sid, iat, sig}` payload, HMAC over `${sid}.${iat}`, 30-day server-side TTL with 60-second skew tolerance, and every `verifyCookie → null → 401 NO_SESSION` trigger. Reference to the fictional `lib/session.resolveCookie(req)` is replaced with `verifyCookie(cookies().get(COOKIE_NAME)?.value)`. The Postman-collection claim at the end of §cURL is removed in favour of the README cookie-jar walkthrough.
+Status: Resolved 2026-05-19 on `feature/day5-hardening`.
+
+## review-004-final I003: Final delivery docs/checklist were not submission-ready
+
+Source: `reviews/review-004-final.md`
+
+Resolved in:
+- `README.md` (ADR-001…013 → ADR-001…014; Day-3 row drops "awaits Codex re-review"; "Planned branches" list replaced with shipped-branch table including review file + merge commit)
+- `docs/07-delivery-checklist.md` (rewritten: removes the never-owned `00-product-research.md` / `01-requirements.md` / Postman / `npm run lint` rows with explicit "out of scope" notes; every shipped engineering / deploy / docs / review row marked ✅ with artefact path; review-004-final remains the only open review row)
+
+Verification:
+`grep -n "ADR-001…013\|awaits Codex re-review of review-006\|feature/init-docs\|feature/pay-subscription\|feature/docs-delivery\|npm run lint\|Postman collection" README.md docs/07-delivery-checklist.md docs/04-api-design.md` returns no matches inside live submission text (only in commit-message-style historical entries elsewhere).
+Status: Resolved 2026-05-19 on `feature/day5-hardening`.
+
+## review-004-final N001: `step_event` write had no committed regression proof
+
+Source: `reviews/review-004-final.md`
+
+Resolved in:
+- `lib/step-repo.ts` (new) — `StepsTxOps` structural seam + pure `runStepsTransaction` + `buildStepsOpsFromTx` Prisma adapter + `persistStepPatch` production entry
+- `app/api/v1/sessions/me/steps/[stepKey]/route.ts` — calls `persistStepPatch` instead of an inline `db.$transaction`
+- `tests/lib/step-repo.test.ts` (new) — 3 cases against an `InMemoryStepsOps`: successful PATCH writes assessment + advances currentStep + appends step_event; weight step records both weightKg + targetWeightKg verbatim in valueJson; throw-on-upsert proves createStepEvent is never reached after the upsert fails.
+
+Verification:
+`npm test` reports 181 → 184. Same SubmitTxOps / PaymentTxOps pattern as review-006 B001; production call graph is byte-identical with the in-memory fakes — only the ops implementation differs.
+Status: Resolved 2026-05-19 on `feature/day5-hardening`.
