@@ -92,15 +92,39 @@ payment.
 
 ## Current Branch
 
-`feature/delivery-compliance-hardening` — final delivery-compliance
-branch. Ships the `/pay` submitted gate, README submission block + paid
-test cURL + email template, logical User/Subscription mapping in
-`docs/03`, `/pay` 409 docs, a full-result trust footer, and final
-checklist updates. Codex re-reviewed `a14b90f` on 2026-05-20:
-I001 and N001 are resolved; `typecheck`, 210 tests, build,
-`db:validate`, and diff-check pass. Initial review's live production
-paid-session cURL smoke remains valid. The branch is mergeable from
-the delivery-compliance review perspective.
+`feature/production-hardening` — post-delivery production-hardening
+branch (8 commits on top of the delivery-compliance merge at
+`cdd075d`). Bumps Next 14.2.15 → 15.5.18 (clears prod `npm audit` to
+0/0, including GHSA-26hh-7cqf-hhc6 and the nested-postcss XSS
+advisory via a top-level `overrides`), then layers five hardening
+changes:
+
+- Baseline response headers via `next.config.mjs:headers()` —
+  XCTO/XFO/Referrer-Policy/Permissions-Policy + a conservative
+  `frame-ancestors 'none'; object-src 'none'; base-uri 'self';
+  form-action 'self'` CSP that intentionally avoids `script-src`
+  guesses.
+- `Cache-Control: private, no-store, max-age=0` on every
+  personalised + error response (`lib/api/cache-control.ts` +
+  `jsonError()`); `/healthz` stays cacheable.
+- 16 KB body-size cap with `413 PAYLOAD_TOO_LARGE` enforced in
+  `lib/api/parse-body.ts` (declared `Content-Length` checked up
+  front + actual body length re-checked).
+- 512-char User-Agent truncation at `createSession` ingest
+  (`lib/session.ts:truncateUserAgent`).
+- `APP_ORIGIN` env allowlist for `lib/internal-fetch.ts:internalUrl()`,
+  with a forwarded-host fallback so cURL/local-dev keep working.
+  Owner sets `APP_ORIGIN=https://project-u415a.vercel.app` on Vercel
+  after merge.
+
+Docs synced: `docs/08` §3.1–§3.4 + §5 rate-limit deferral; `docs/04`
+413 row + Cache-Control bullet; `docs/02` §5 cross-ref; README status
+block bumped to Next 15 + 222 tests + audit clean.
+
+Tests 210 → 222. `tsc --noEmit`, `npm test`, `next build`, `npm audit
+--omit=dev`, and `npx prisma validate` all clean. No Codex review on
+this branch yet — Owner decides whether to request review-011 or
+merge directly.
 
 ## Code Management
 

@@ -858,3 +858,19 @@ Resolved in:
 Verification:
 The prose now matches the endpoint-section examples (e.g. `/sessions/me/steps/:stepKey` shows `firstMissingStep`, `/submit` shows `missingSteps`). No code change.
 Status: Resolved 2026-05-20 on `feature/delivery-compliance-hardening`.
+
+## Owner-raised hardening (production-hardening branch, no review yet)
+
+Items from Owner's post-delivery-compliance prioritised list (accepted
+2026-05-20):
+
+- **Prod `npm audit` dirty** → `chore(deps): upgrade next 14.2.15 → 15.5.18 to clear prod audit`. `next@15.5.18` patches GHSA-26hh-7cqf-hhc6 (segment-prefetch middleware bypass) and the rest of the 14.x advisories; top-level `overrides.postcss = "^8.5.14"` clears the moderate nested `postcss` XSS-in-CSS-Stringify. `npm audit --omit=dev` is now 0/0.
+- **Missing security response headers** → `feat(security): add baseline response headers (XCTO, XFO, referrer, permissions, CSP frame-ancestors)`. `next.config.mjs:headers()` returns the five-header baseline for `/:path*`. CSP intentionally limited to `frame-ancestors 'none'; object-src 'none'; base-uri 'self'; form-action 'self'` so Next's inline runtime stays working.
+- **Personalised API missing `Cache-Control: private,no-store`** → `feat(security): Cache-Control private,no-store on personalised + error responses`. New `lib/api/cache-control.ts:withNoStore` is wired into every `/api/v1` success path except `/healthz`; `jsonError()` always carries the header so 401 / 409 / 413 / 422 / 500 are equally protected. Verified by `tests/lib/api/cache-control.test.ts` (2 cases).
+- **`parseJsonBody()` has no body cap** → `feat(security): enforce 16 KB body-size cap with 413 PAYLOAD_TOO_LARGE`. `MAX_BODY_BYTES = 16 * 1024`. Declared `Content-Length` checked up front + `req.text().length` re-checked so a missing/lying header doesn't bypass. New `ERROR_CODES.PAYLOAD_TOO_LARGE`. Verified by 3 new `tests/lib/api/parse-body.test.ts` cases.
+- **`userAgent` not truncated at ingest** → `feat(security): truncate captured User-Agent to 512 chars`. New `USER_AGENT_MAX_LENGTH = 512` + `truncateUserAgent()` in `lib/session.ts` applied inside `createSession`. Verified by `tests/lib/session-ua.test.ts` (3 cases).
+- **`internalUrl()` trusts forwarded host/proto** → `feat(security): APP_ORIGIN allowlist for internalUrl(), with forwarded-host fallback`. `APP_ORIGIN` env var pins the origin via `new URL(...).origin`; malformed value throws on first use. Forwarded-host fallback retained for cURL/local. Verified by `tests/lib/internal-fetch.test.ts` (4 cases). Owner sets `APP_ORIGIN=https://project-u415a.vercel.app` on Vercel post-merge.
+
+Rate limiting was raised in the same list and explicitly deferred by Owner. The rationale + path forward (Upstash/Vercel KV; throttle `/api/v1/sessions` and `/api/v1/pay` first) lives in `docs/08-security-hardening.md` §5.
+
+Branch state at closeout: 8 commits, 210 → 222 tests, `tsc --noEmit` / `npm test` / `next build` / `npm audit --omit=dev` / `npx prisma validate` all clean.
