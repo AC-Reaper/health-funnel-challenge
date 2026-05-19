@@ -2,10 +2,12 @@
 
 ## Status
 
-Open — no Blocking findings. 1 Important and 1 Nice-to-have remain.
+Resolved — re-reviewed `a14b90f`; no Blocking, Important, or
+Nice-to-have findings remain.
 
 Branch reviewed: `feature/delivery-compliance-hardening`.
-Head reviewed: `38f6911`.
+Initial head reviewed: `38f6911`.
+Re-review head: `a14b90f`.
 
 Scope (all small, scoped, no new dependencies):
 
@@ -62,6 +64,13 @@ Verification:
   produced a paid session row (`sessionId=ab45ea45-2d02-4e20-a816-23b9c8386a54`,
   `paymentId=37cc17e6-f323-4054-99a5-2fe926f1b4f1`).
 
+Re-review verification at `a14b90f`:
+- `npm run typecheck` clean.
+- `npm test` — 210 tests green.
+- `npm run build` clean.
+- `npm run db:validate` clean.
+- `git diff --check` clean.
+
 ## Findings
 
 ### Blocking
@@ -91,6 +100,13 @@ None.
   `review-010-delivery-compliance`." Add `review-010` to the checklist
   Review section after fixing this review. Refresh README status to
   mention reviews `000…010` once review-010 is resolved.
+- **Re-review at `a14b90f`: Resolved.**
+  `docs/07-delivery-checklist.md` now says the review log is current
+  through `review-010-delivery-compliance`, the Review section includes
+  `review-010-delivery-compliance.md` as `Resolved`, and `README.md`
+  now says "eleven Codex reviews (000…010) Resolved." Stale live
+  submission text no longer contains the old `review-004-final open`
+  or `000…009` wording.
 
 ### Nice-to-have
 
@@ -112,6 +128,11 @@ None.
   `INCOMPLETE_ASSESSMENT`. Keys are camelCase request fields unless the
   endpoint documents a meta key such as `firstMissingStep` or
   `missingSteps`."
+- **Re-review at `a14b90f`: Resolved.**
+  `docs/04-api-design.md` now states that `fields` appears when an
+  error carries structured field context, and explicitly enumerates
+  `VALIDATION_ERROR`, `STEP_OUT_OF_ORDER`, and
+  `INCOMPLETE_ASSESSMENT` with their current field shapes.
 
 ## Recommendations
 
@@ -122,6 +143,6 @@ None.
   requirement in the right shape for a cookie-auth design: it prints a
   session id while keeping the signed cookie jar as the actual auth
   credential. The live smoke confirms the recipe works on production.
-- No schema, API contract, or paywall-leak Blocking issue found in this
-  pass. Fix I001 before merge so the final submission docs do not carry
-  an avoidable contradiction.
+- No schema, API contract, paywall-leak, or final-documentation
+  Blocking/Important issue remains. The branch is mergeable from the
+  review-010 delivery-compliance perspective.

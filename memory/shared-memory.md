@@ -88,7 +88,7 @@ payment.
 - Test suite → `tests/**` (vitest, 210 tests on `feature/delivery-compliance-hardening`)
 - ADR log → `memory/decisions.md` (ADR-001…014 Accepted)
 - Open questions → `memory/open-questions.md` (no open blocker)
-- Latest reviews → `reviews/review-010-delivery-compliance.md` (Open at `38f6911`: no Blocking; I001/N001 docs-only findings); `reviews/review-009-security-hardening.md` (Resolved at `bcb4f2a`); `reviews/review-008-frontend-polish.md` (Resolved at `c974fbb`); `reviews/review-004-final.md` (Resolved at `f2b37f8`); `reviews/review-007-browser-smoke.md` (Resolved); `reviews/review-006-day3.md` (Resolved); `reviews/review-002-api.md` and `reviews/review-003-db.md` are resolved for earlier branches.
+- Latest reviews → `reviews/review-010-delivery-compliance.md` (Resolved at `a14b90f`); `reviews/review-009-security-hardening.md` (Resolved at `bcb4f2a`); `reviews/review-008-frontend-polish.md` (Resolved at `c974fbb`); `reviews/review-004-final.md` (Resolved at `f2b37f8`); `reviews/review-007-browser-smoke.md` (Resolved); `reviews/review-006-day3.md` (Resolved); `reviews/review-002-api.md` and `reviews/review-003-db.md` are resolved for earlier branches.
 
 ## Current Branch
 
@@ -96,10 +96,11 @@ payment.
 branch. Ships the `/pay` submitted gate, README submission block + paid
 test cURL + email template, logical User/Subscription mapping in
 `docs/03`, `/pay` 409 docs, a full-result trust footer, and final
-checklist updates. Codex reviewed `38f6911` on 2026-05-20:
-`typecheck`, 210 tests, build, `db:validate`, diff-check, and live
-production paid-session cURL smoke pass. review-010 is Open with no
-Blocking findings; remaining items are docs-only I001/N001.
+checklist updates. Codex re-reviewed `a14b90f` on 2026-05-20:
+I001 and N001 are resolved; `typecheck`, 210 tests, build,
+`db:validate`, and diff-check pass. Initial review's live production
+paid-session cURL smoke remains valid. The branch is mergeable from
+the delivery-compliance review perspective.
 
 ## Code Management
 
