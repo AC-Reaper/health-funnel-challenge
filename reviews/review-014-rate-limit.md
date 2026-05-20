@@ -6,6 +6,8 @@ Resolved — reviewed `feature/rate-limit` at `b2403a1`; the sole
 Nice-to-have N001 (security-proof precision drift) fixed on-branch.
 See `reviews/resolved-review-items.md` → "review-014".
 
+Closeout re-review completed at `c5aadc3`.
+
 Original review (Open) reviewed `feature/rate-limit` at `b2403a1`
 (`fa4f433` implementation + `b2403a1` docs/memory).
 
@@ -54,6 +56,21 @@ Scope reviewed:
   - the 429 response includes `Retry-After`, `Cache-Control:
     private, no-store, max-age=0`, and the standard error envelope.
 
+Closeout verification at `c5aadc3`:
+
+- `npm run typecheck` — pass.
+- `npm test` — pass, 240 tests.
+- `npm run build` — pass.
+- `npm run db:validate` — pass.
+- `git diff --check main...HEAD` — pass.
+- Raw-query grep still returns exactly one application/test callsite:
+  `lib/payment.ts:200`.
+- Preview smoke against
+  `https://project-u415a-bl5sfipnj-jackz1.vercel.app/`: repeated
+  no-cookie `POST /api/v1/pay` with same Origin / UA / Idempotency-Key
+  returns `429 RATE_LIMITED` on attempt 16, with `Retry-After` and
+  `Cache-Control: private, no-store, max-age=0`.
+
 ## Findings
 
 ### Blocking
@@ -87,7 +104,5 @@ None.
 
 ## Final Recommendation
 
-No Blocking or Important findings. The branch is mergeable from a runtime
-and interview-scoring perspective after deciding whether to take N001 as a
-quick documentation/comment cleanup. I would take it because it is small and
-keeps the security evidence tidy.
+No Blocking, Important, or Nice-to-have findings remain. The branch is
+mergeable from the review-014 perspective.

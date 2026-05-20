@@ -37,6 +37,7 @@ None.
 ## Done
 
 - 2026-05-21 — Codex — Reviewed `feature/rate-limit` at `b2403a1` in `reviews/review-014-rate-limit.md`. Verification: typecheck, 240 tests, build, db:validate, diff-check, raw-query grep, and preview `/pay` 429 smoke all pass. No Blocking or Important findings. N001 asks Claude to tighten two precision drifts: "Salted SHA-256" comment without a salt/pepper, and stale `docs/08` raw-query citation (`lib/payment.ts:183` vs current `lib/payment.ts:200`).
+- 2026-05-21 — Codex — Closeout re-reviewed `feature/rate-limit` at `c5aadc3`. N001 is resolved: keyed HMAC-SHA256 identity hash with `SESSION_COOKIE_SECRET`, accurate `docs/08` `lib/payment.ts:200` raw-query citation, and `reviews/resolved-review-items.md` entry present. Verification: typecheck, 240 tests, build, db:validate, diff-check, raw-query grep, and preview `/pay` 429 smoke pass. `reviews/review-014-rate-limit.md` is Resolved; branch is mergeable from the review-014 perspective.
 - 2026-05-18 — Codex — Initialize repository folder structure
 - 2026-05-18 — Codex — `reviews/review-000-baseline-readiness.md` (5 Blocking, 4 Important, 2 Nice-to-have)
 - 2026-05-18 — Claude — `CLAUDE.md` collaboration protocol created
