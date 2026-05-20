@@ -10,9 +10,9 @@
 > audit (T-502); cookie payload extended with `iat` for server-side TTL
 > (T-501, ADR-014).
 >
-> **Decision gate**: ADR-001…016 in `memory/decisions.md` are Accepted.
+> **Decision gate**: ADR-001…017 in `memory/decisions.md` are Accepted.
 
-## 0. Accepted decisions (ADR-001…016)
+## 0. Accepted decisions (ADR-001…017)
 
 The accepted decisions that frame this architecture live in
 `memory/decisions.md`. Short index — see ADR bodies for context,
@@ -36,6 +36,7 @@ rationale, and consequences:
 | ADR-014 | Server-side cookie TTL via `iat` in HMAC payload (T-501) | Accepted |
 | ADR-015 | Framework patch baseline: Next.js 15.5.18 for prod audit hygiene (amends ADR-001 version only) | Accepted |
 | ADR-016 | Rate limiting: Postgres-backed best-effort fixed-window on hot write routes (reverses the earlier defer) | Accepted |
+| ADR-017 | Payment trust boundary: entitlement granted only by a signature-verified (simulated) provider webhook; browser checkout cannot (amends ADR-006) | Accepted |
 
 ---
 
@@ -90,12 +91,20 @@ GET /api/v1/results/me           ──► teaser (entitlement_status = free)
        │
        │  (paywall CTA navigates to /pay)
        ▼
-GET /pay                         ──► browser route, mock payment form
+GET /pay                         ──► merchant upsell page
        │
        ▼
-POST /api/v1/pay                 ──► requires Idempotency-Key header
-       │     ├─ unique (session_id, idempotency_key) — replays are no-ops
-       │     └─ transaction: insert payment + set session.entitlement_status='paid'
+POST /api/v1/payments/checkout   ──► browser; creates order; CANNOT grant
+       │
+       ▼
+GET /checkout                    ──► mock provider page; "Confirm" runs a
+       │                              server action that signs the event
+       ▼
+POST /api/v1/payments/webhook    ──► ONLY grant path (ADR-017)
+       │     ├─ verify X-Payment-Signature (HMAC) — else 401
+       │     ├─ re-check amount / currency / status — else 422
+       │     └─ transaction: insert payment + set entitlement_status='paid'
+       │        (unique (session_id, idempotency_key) — replays are no-ops)
        ▼
 GET /api/v1/results/me           ──► full
 ```
@@ -290,7 +299,7 @@ Each day ends at a Codex review trigger so quality is loaded throughout, not bol
 | R5 | Cookie identity = single device only; evaluator tries two browsers, gets confused | Low | Med | Documented limitation in README and §9. |
 | R6 | Vercel cold start makes first click feel broken | Low | Low | README tells the evaluator to hit `/healthz` first. |
 | R7 | Free-result endpoint leaks paid fields | Low | High | Two-serializer design + leak test in CI. |
-| R8 | Implementation starts before accepted ADRs are recorded → rework | Low | High | ADR-001…016 are accepted; future scope changes require new ADRs. |
+| R8 | Implementation starts before accepted ADRs are recorded → rework | Low | High | ADR-001…017 are accepted; future scope changes require new ADRs. |
 
 ---
 

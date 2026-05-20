@@ -120,7 +120,7 @@ the referenced ADRs.
 | Account / login flow | Out of scope | ADR-004 |
 | Subscription / Entitlement | `session.entitlement_status` (`free` / `paid`) + `session.paid_at` | ADR-007 |
 | Recurring subscription billing cycle | Out of scope (one-time mock) | ADR-006 |
-| Payment record | `payment` table — DB `UNIQUE (session_id, idempotency_key)` + partial unique index `payment_one_success_per_session_idx WHERE status='succeeded'` | ADR-006, ADR-012 |
+| Payment record | `payment` table — DB `UNIQUE (session_id, idempotency_key)` + partial unique index `payment_one_success_per_session_idx WHERE status='succeeded'`. The row is written only from the signature-verified webhook (ADR-017), never directly from the browser. | ADR-006, ADR-012, ADR-017 |
 | Step-progression audit | `step_event` (append-only, written inside the PATCH transaction) | ADR-009 |
 
 The collapse is intentional. The brief permits anonymous sessions and

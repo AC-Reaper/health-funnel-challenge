@@ -4,7 +4,7 @@
 
 Health quiz funnel full-stack challenge for Ruiqi Technology (睿迄科技).
 5-day delivery. MVP is merged to `main`; post-MVP security hardening is
-review-resolved on `feature/security-hardening` at `bcb4f2a`. ADR-001…016
+review-resolved on `feature/security-hardening` at `bcb4f2a`. ADR-001…017
 are Accepted.
 
 ## Final Goal
@@ -86,52 +86,50 @@ payment.
 - Browser pages → `app/page.tsx`, `app/funnel/**`, `app/pay/{page,PayButton}.tsx`, `app/results/page.tsx`
 - Step audit → `step_event` model + `20260519000000_add_step_event`
   migration (ADR-009 accepted on Day 5)
-- Test suite → `tests/**` (vitest, 240 tests on `feature/rate-limit`)
-- ADR log → `memory/decisions.md` (ADR-001…016 Accepted)
+- Test suite → `tests/**` (vitest, 250 tests on `feature/payment-webhook`)
+- ADR log → `memory/decisions.md` (ADR-001…017 Accepted)
 - Open questions → `memory/open-questions.md` (no open blocker)
-- Latest reviews → `reviews/review-014-rate-limit.md` (Resolved — N001 precision cleanup fixed on-branch after `b2403a1`); `reviews/review-013-landing-cta.md` (Resolved at `f3ea061`, merged); `reviews/review-012-security-polish.md` (Resolved); `reviews/review-011-production-hardening.md` (Resolved at `06817a5`); earlier reviews are resolved for their branches.
+- Latest reviews → `reviews/review-014-rate-limit.md` (Resolved, merged to `main` @ `ffdab50`); `reviews/review-013-landing-cta.md` (Resolved, merged); `reviews/review-012-security-polish.md` (Resolved, merged); `reviews/review-011-production-hardening.md` (Resolved, merged); earlier reviews are resolved for their branches. `feature/payment-webhook` awaits its review.
 
 ## Current Branch
 
-`feature/rate-limit` — adds rate limiting on the hot write routes
-(ADR-016), off `main` @ `bf182d6` (landing-cta + security-polish +
-production-hardening + delivery-compliance all merged). Reverses the
-earlier "rate limiting deferred" non-goal at Owner's request.
+`feature/payment-webhook` — payment trust boundary (ADR-017), off
+`main` @ `ffdab50` (rate-limit + landing-cta + security-polish +
+production-hardening + delivery-compliance all merged). Makes the
+boundary production-correct as a **simulated** signed webhook (no real
+Stripe): the browser checkout can no longer mint `paid`; entitlement is
+granted only by a signature-verified provider webhook.
 
-- Postgres-backed best-effort fixed-window limiter
-  (`lib/api/rate-limit.ts`) on `POST /sessions`, step `PATCH`,
-  `POST /submit`, `POST /pay`. New `rate_limit` operational table +
-  migration `20260521000000_add_rate_limit` (5 domain + 1 operational
-  table). Owner applies it via `npm run db:deploy` at/before deploy.
-- Key = keyed HMAC-SHA256 (peppered with `SESSION_COOKIE_SECRET`) of
-  IP + session id + UA per route per 60s window (no raw IP/UA stored).
-  Fail-open on store error. `429 RATE_LIMITED` +
-  `Retry-After`. Limits/identity: sessions 20, steps 80, submit 15,
-  pay 15. Opportunistic prune (~2%) bounds the table.
-- Pure helpers + a `RateLimitStore` seam → `tests/lib/api/rate-limit.test.ts`
-  (12 cases) exercise the flow with an in-memory store; the Prisma
-  upsert adapter is the only I/O. Used Prisma upsert (not raw SQL) to
-  keep the docs/08 "exactly one $queryRaw" claim true.
-- Docs synced: ADR-016; `docs/08` §3.5 + §5 + changelog; `docs/04`
-  429 enforced; `docs/02` §0/§9; `docs/03` §1 operational table;
-  `docs/07`; `docs/05` Phase-1 reconciliation; README. Q-007's
-  "ADR-016 candidate" wording fixed (ADR-016 is now the limiter).
+- `POST /api/v1/payments/checkout` (browser, cookie + same-origin +
+  rate-limited) creates the order descriptor — **no grant**.
+- `POST /api/v1/payments/webhook` is the only grant path. No cookie/
+  same-origin; auth = `X-Payment-Signature` HMAC-SHA256 over the raw
+  body keyed by new env `PAYMENT_WEBHOOK_SECRET`. Verifies sig (401
+  INVALID_SIGNATURE) → `.strict` schema → amount/currency/status (422)
+  → reuses the **unchanged** `processPayment` (FOR UPDATE + idempotency).
+- `POST /api/v1/pay` removed. Browser one-click: `/pay` → checkout →
+  `/checkout` mock-provider page → `confirmMockPayment` server action
+  (the only place that signs, server-side) → webhook → `/results`.
+- `lib/payment-webhook.ts` (pure sign/verify/validate) +
+  `tests/lib/payment-webhook.test.ts` (10 cases). No schema/migration
+  change (payment table reused).
+- Docs synced: ADR-017; `docs/04` (checkout+webhook replace /pay, 8
+  endpoints, 401 INVALID_SIGNATURE); `docs/08` §3.6 + §5 flip +
+  attack-surface + changelog; `docs/03` §2.1; `docs/02` §0/§2; README
+  (status, tech-stack, §Paid test session rewritten — checkout +
+  openssl-signed webhook + wrong-sig→401).
 
-Verification: `tsc --noEmit` clean, `npm test` 240 green,
-`next build` clean, `npx prisma validate` clean, `git diff --check`
-clean. Codex review-014: 0 Blocking/Important; the one Nice-to-have
-(N001) is fixed on-branch — `identityHash` is now a real keyed HMAC
-(peppered with `SESSION_COOKIE_SECRET`, was a plain SHA-256 mislabelled
-"salted"), and the `docs/08` `$queryRaw` citation corrected
-`lib/payment.ts:183` → `:200`. `reviews/review-014-rate-limit.md` is
-Resolved. The branch is mergeable from the review-014 perspective.
+Verification: `tsc --noEmit` clean, `npm test` 250 green, `next build`
+clean (/pay gone; payments/checkout + payments/webhook + /checkout
+added), `npx prisma validate` clean, `git diff --check` clean. openssl
+HMAC recipe verified to byte-match the server `signWebhookPayload`.
+New env `PAYMENT_WEBHOOK_SECRET` in local `.env`; Owner sets it on
+Vercel. Awaiting Codex review (gated — touches the grant path).
 
-Prior post-MVP work (all merged to `main`): state-aware landing CTA
-(review-013), security-polish — `poweredByHeader: false` + mock-payment
-boundary + CSP-deferral docs (review-012), and production-hardening —
-Next 15.5.18, baseline security headers, `Cache-Control: no-store`,
-16 KB body cap, UA truncation, `APP_ORIGIN` allowlist (review-011).
-Owner sets `APP_ORIGIN=https://project-u415a.vercel.app` on Vercel.
+Prior post-MVP work (all merged to `main`): rate limiting (review-014),
+state-aware landing CTA (review-013), security-polish (review-012),
+production-hardening (review-011). Owner sets
+`APP_ORIGIN=https://project-u415a.vercel.app` on Vercel.
 
 ## Code Management
 

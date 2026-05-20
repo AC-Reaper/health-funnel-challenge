@@ -22,7 +22,7 @@ state-changing.
 | Step PATCH | Out-of-order writes, prototype pollution, coherence violations | `lib/validation/steps.ts` (bounded enums + numeric ranges), `Object.hasOwn` step-key guard (B002), first-incomplete-step rule (ADR-008), `checkWeightCoherence` / `checkMainGoalChange` |
 | Submit | Inserting a result without a complete or coherent assessment | `FULL_ASSESSMENT_SCHEMA.superRefine` re-validates server-side; DB `UNIQUE (result.session_id)` + P2002 race recovery |
 | Results gate | Free user receiving paid fields | Two distinct serializer **types** (`TeaserResultDTO` vs `FullResultDTO`); type system cannot emit paid fields on teaser (review-001 §4) |
-| Pay | Double-charge, log-poisoning via `Idempotency-Key`, replay storms | `IDEMPOTENCY_KEY_SCHEMA` (printable ASCII), DB `UNIQUE (session_id, idempotency_key)`, partial unique index `payment_one_success_per_session_idx WHERE status='succeeded'` (ADR-012) |
+| Pay | Browser minting `paid`, double-charge, replay storms | Grant only via signature-verified webhook (`X-Payment-Signature` HMAC, ADR-017) — browser checkout can't grant; DB `UNIQUE (session_id, idempotency_key)` + partial unique index `payment_one_success_per_session_idx WHERE status='succeeded'` (ADR-012) |
 | Headers | Cross-site browser POSTs, CSRF-style attacks | `SameSite=Lax` + `HttpOnly` + `Secure` (prod) on the cookie; `checkSameOrigin` guard on every mutating route |
 
 ## 2. Existing controls (with citations)
@@ -187,6 +187,35 @@ helpers + an in-memory `RateLimitStore`: under-limit pass, over-limit
 429 + `Retry-After`, fail-open on store error, window rollover reset,
 per-identity isolation).
 
+## 3.6 Payment trust boundary — signature-verified webhook (ADR-017)
+
+Entitlement is granted **only** by a payment-provider webhook whose
+signature the server verifies — never directly from a browser-callable
+endpoint. The provider is *simulated* (no real Stripe), but the
+boundary, signature verification, and order checks are real.
+
+| Stage | Endpoint | Can grant? | Control |
+| - | - | - | - |
+| Merchant checkout | `POST /api/v1/payments/checkout` | **No** | Cookie + same-origin + rate-limited; returns the order descriptor only, no DB write. |
+| Provider callback | `POST /api/v1/payments/webhook` | **Yes (only)** | No cookie/origin; auth is `X-Payment-Signature` = HMAC-SHA256(raw body, `PAYMENT_WEBHOOK_SECRET`), verified constant-time. Then re-checks `amountCents`/`currency`/`status` against the server price constants before delegating to the unchanged `processPayment` (DB idempotency). |
+
+Why this is safe: the signing secret lives server-side only (the
+`/checkout` mock-provider page's `confirmMockPayment` server action, and
+in production the real provider). The browser cannot forge a signature,
+so it cannot mint `paid`. A validly-signed but tampered amount/currency
+is rejected by the order re-check.
+
+Reproducer (falsifiable):
+- Sign a payload and POST the webhook → `200`, entitlement flips to
+  `paid` (README §Paid test session).
+- POST the same payload with a wrong/absent `X-Payment-Signature` →
+  `401 INVALID_SIGNATURE`, **no** grant.
+
+Tests: `tests/lib/payment-webhook.test.ts` (sign/verify roundtrip,
+tamper/wrong-secret/missing/length-mismatch rejects, `.strict` schema,
+amount/currency/status validation). `processPayment` idempotency tests
+in `tests/lib/payment.test.ts` are unchanged.
+
 ## 4. Day-5 / post-MVP additions changelog
 
 - **ADR-014** — server-side cookie TTL via `iat` + 30d expiry + 60s
@@ -206,8 +235,13 @@ per-identity isolation).
   `X-Powered-By`), documented mock-payment trust boundary (§5) and
   the post-MVP strict-CSP plan (§3.1).
 - **Rate-limit branch (ADR-016)** — Postgres-backed best-effort
-  fixed-window limiter on `/sessions`, step PATCH, `/submit`, `/pay`
-  (§3.5). Reverses the earlier "rate limiting deferred" non-goal.
+  fixed-window limiter on `/sessions`, step PATCH, `/submit`,
+  `payments/checkout`, `payments/webhook` (§3.5). Reverses the earlier
+  "rate limiting deferred" non-goal.
+- **Payment-webhook branch (ADR-017)** — entitlement now grants only via
+  a signature-verified webhook (§3.6); browser checkout can't mint
+  `paid`. `POST /api/v1/pay` removed; `payments/checkout` +
+  `payments/webhook` added.
 
 ## 5. Intentionally out of scope
 
@@ -224,21 +258,20 @@ later, they are documented elsewhere as known follow-ups.
   scored "支付回调闭环" criterion lands on the design, not on a real
   Stripe integration (ADR-006).
 
-  **Mock-payment trust boundary.** In this demo, `POST /api/v1/pay`
-  intentionally grants entitlement directly after a submitted session
-  so the evaluator can verify the paid-result loop from the browser /
-  cURL. In production, entitlement would be granted **only** from a
-  payment-provider webhook (e.g. Stripe Checkout `checkout.session.
-  completed`) verified server-side via the webhook signature — never
-  from a browser-callable endpoint. This is intentional for the
-  interview demo and is **not** a current challenge blocker, because
-  the brief explicitly asks for mock payment; the real flow is a
-  documented post-MVP swap that reuses the existing idempotency-key +
-  DB-unique-constraint shape (the `/pay` handler would become the
-  webhook handler).
+  **Mock-payment trust boundary** — **now implemented as a simulated
+  signed webhook** (ADR-017, §3.6). Entitlement is granted only by
+  `POST /api/v1/payments/webhook` after the server verifies an
+  HMAC-SHA256 signature + amount/currency/status; the browser
+  `POST /api/v1/payments/checkout` cannot grant. Still out of scope: a
+  *real* provider SDK (Stripe Checkout + `stripe.webhooks.constructEvent`),
+  card capture, refunds, and recurring subscription lifecycle. Swapping
+  the simulated provider for the real one replaces the mock-provider page
+  + the server-action signing; the webhook's verify→validate→
+  `processPayment` shape stays.
 - **Rate limiting** — **now implemented** (ADR-016, §3.5): a
   Postgres-backed best-effort fixed-window limiter on `/sessions`, step
-  PATCH, `/submit`, and `/pay`. Still out of scope: a dedicated
+  PATCH, `/submit`, `payments/checkout`, and `payments/webhook`. Still
+  out of scope: a dedicated
   distributed store (Upstash / Vercel KV) for hard global guarantees
   under large-scale abuse — the higher-throughput prod path, not needed
   at demo scale.

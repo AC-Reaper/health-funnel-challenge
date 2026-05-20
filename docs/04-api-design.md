@@ -2,7 +2,7 @@
 
 > Status: **Current** — Claude 2026-05-18, last updated 2026-05-19
 > against `feature/day5-hardening` after review-004-final I002. Mirrors
-> `docs/02-architecture.md` v2 + ADR-001…016. The seven routes below
+> `docs/02-architecture.md` v2 + ADR-001…017. The eight routes below
 > are all implemented, smoked, and reviewed; review-001/002/003/006/007
 > are Resolved. The auth section reflects ADR-014's server-side cookie
 > TTL.
@@ -109,7 +109,8 @@ All errors share one envelope, regardless of status code:
 | 403 | `FORBIDDEN_ORIGIN` | `Origin` header present and does not match the receiving host. Sent only when `Origin` is set (cURL / server-internal fetch are unaffected). See `docs/08-security-hardening.md` §2. |
 | 404 | `NOT_FOUND` | Resource id is well-formed but does not exist. |
 | 409 | `STEP_OUT_OF_ORDER` | Step save would skip a required earlier step. |
-| 409 | `NOT_SUBMITTED` | Result or payment requested before `/submit`. Used by both `GET /api/v1/results/me` and `POST /api/v1/pay`. |
+| 401 | `INVALID_SIGNATURE` | `POST /api/v1/payments/webhook` received a missing or invalid `X-Payment-Signature`. The webhook is the only grant path; an unsigned/forged call cannot mint `paid` (ADR-017). |
+| 409 | `NOT_SUBMITTED` | Result or checkout requested before `/submit`. Used by `GET /api/v1/results/me` and `POST /api/v1/payments/checkout`. |
 | 409 | `ALREADY_SUBMITTED` | `/submit` called again with different inputs (we still return 200 with the existing result for identical replays — see `/submit`). |
 | 413 | `PAYLOAD_TOO_LARGE` | Request body exceeded the `MAX_BODY_BYTES` (16 KB) cap. Largest legitimate body in the funnel is well under 1 KB; see `lib/api/parse-body.ts` and `docs/08-security-hardening.md` §3.2. |
 | 422 | `VALIDATION_ERROR` | Zod validation failed on body or step. |
@@ -350,69 +351,61 @@ All errors share one envelope, regardless of status code:
 
 ---
 
-### 6. Mock payment (browser route)
+### 6. Mock payment (browser routes)
 
-`GET /pay`
+`GET /pay` — the upsell page. Cookie required (redirect to `/` if
+missing). The CTA calls `POST /api/v1/payments/checkout` and redirects
+to the mock provider page `/checkout`. The brief asks for `/pay` by
+name; this is that page. It no longer grants anything.
 
-- **Auth**: cookie required (redirect to `/` if missing).
-- **Behaviour**: renders a minimal payment form (one CTA button "Pay
-  $9.99"). On submit, the page calls `POST /api/v1/pay` with a freshly
-  generated `Idempotency-Key` and on success redirects to `/results`.
-- Not part of `/api/v1`. The challenge brief asks for `/pay` by name; this
-  is that page.
+`GET /checkout` — the **mock payment provider's** hosted-checkout page
+(stands in for a Stripe Checkout redirect). Cookie required. Confirming
+here runs a server action that signs a `checkout.completed` event with
+`PAYMENT_WEBHOOK_SECRET` and posts it to the webhook below — the only
+path that grants. The browser never holds the signing secret.
+
+Payment trust boundary (ADR-017): entitlement is granted **only** by a
+signature-verified provider webhook, never directly from a
+browser-callable endpoint.
 
 ---
 
-### 7. Mock payment (API)
+### 7a. Create checkout (API)
 
-`POST /api/v1/pay`
+`POST /api/v1/payments/checkout`
 
-- **Auth**: cookie required.
-- **Required header**: `Idempotency-Key: <1-128 printable-ASCII chars>`.
-  - Schema: `lib/api/idempotency-key.ts` enforces `[\x20-\x7E]+`,
-    length 1-128. UUID v4, base64, hex, and short human-readable keys
-    all fit. Control characters, embedded newlines, and any non-ASCII
-    Unicode are rejected (log-poisoning vector + DB column is
-    `VARCHAR(128)` per ADR-006). See `docs/08-security-hardening.md` §2.
-  - Missing, empty, > 128 chars, or containing non-printable / non-ASCII
-    characters → `400 BAD_REQUEST`.
-- **Body**: `{}`. `amountCents`, `currency` are server constants and are
-  rejected if provided.
-- **Behaviour** (single transaction):
-  1. `SELECT` the session row for update.
-  2. If `session.entitlement_status = 'paid'` and this
-     `Idempotency-Key` already has a `payment` row, return that existing
-     row (same-key replay).
-  3. If `session.entitlement_status = 'paid'` and this key is new, return
-     the existing paid entitlement as a no-op and do not insert a new
-     `payment` row.
-  4. Otherwise, `INSERT INTO payment (session_id, idempotency_key, status, amount_cents, currency) VALUES (...) ON CONFLICT (session_id, idempotency_key) DO NOTHING`.
-  5. If no row inserted, `SELECT` the existing one (same-key idempotent replay).
-  6. `UPDATE session SET entitlement_status='paid', paid_at=now() WHERE id=$1`.
-  7. Commit.
-- **Replay semantics**:
-  - Same `Idempotency-Key` again → returns the original `payment` payload
-    unchanged. `entitlementStatus` is still `paid`.
-  - Different `Idempotency-Key` against an already-paid session → `200 OK`
-    with the existing paid entitlement. No second `payment` row is inserted.
-- **200 OK**
-  ```json
-  {
-    "paymentId": "f0b8c2e4-7d3a-4d5e-9c8b-1a2b3c4d5e6f",
-    "sessionId": "1a2b…",
-    "status": "succeeded",
-    "amountCents": 999,
-    "currency": "USD",
-    "entitlementStatus": "paid",
-    "paidAt": "2026-05-18T09:37:00.000Z"
-  }
-  ```
-- **400 BAD_REQUEST** if `Idempotency-Key` missing or non-printable-ASCII.
-- **403 FORBIDDEN_ORIGIN** if `Origin` is present and does not match
-  the receiving host/scheme.
-- **409 NOT_SUBMITTED** if the session has not been submitted yet
-  (`session.status !== 'submitted'`). Submit must precede pay; the
-  browser `/pay` page does the same check via `GET /results/me`.
+- **Auth**: cookie required; same-origin guarded; rate-limited.
+- **Body**: `{}`.
+- **Behaviour**: validates the session is `submitted` and `free`, then
+  returns the order descriptor. **No DB write, no entitlement change.**
+- **200 OK** (free session): `{ "checkoutId": "<uuid>", "sessionId": "1a2b…", "amountCents": 999, "currency": "USD", "status": "pending" }`
+- **200 OK** (already paid): `{ "sessionId": "1a2b…", "amountCents": 999, "currency": "USD", "status": "completed" }`
+- **401 NO_SESSION** / **403 FORBIDDEN_ORIGIN** / **409 NOT_SUBMITTED** /
+  **429 RATE_LIMITED** as applicable.
+
+### 7b. Payment provider webhook (API) — the only grant path
+
+`POST /api/v1/payments/webhook`
+
+- **Auth**: **no cookie, no same-origin** (a real provider calls
+  cross-origin). The auth is the signature.
+- **Required header**: `X-Payment-Signature: sha256=<hex>` — HMAC-SHA256
+  of the **raw request body** keyed by `PAYMENT_WEBHOOK_SECRET`. Verified
+  constant-time; missing/invalid → `401 INVALID_SIGNATURE`.
+- **Body** (`.strict`): `{ "eventType": "checkout.completed", "sessionId": "<uuid>", "idempotencyKey": "<1-128>", "amountCents": 999, "currency": "USD", "status": "succeeded" }`.
+- **Behaviour**: verify signature → schema → re-check
+  `amountCents`/`currency`/`status` against the server price constants
+  (`422 VALIDATION_ERROR` on mismatch) → delegate to the unchanged
+  single-transaction grant (`SELECT … FOR UPDATE`, insert `payment`
+  `ON CONFLICT DO NOTHING`, flip `entitlement_status='paid'`).
+- **Replay / idempotency** (unchanged, ADR-006/012): same
+  `idempotencyKey` → same `payment` row; a new key against an
+  already-paid session → no-op, no second row.
+- **200 OK**: `{ "received": true, "paymentId": "<uuid>", "sessionId": "1a2b…", "status": "succeeded", "amountCents": 999, "currency": "USD", "entitlementStatus": "paid", "paidAt": "2026-05-21T09:37:00.000Z" }`
+- **401 INVALID_SIGNATURE** (bad/absent signature) — no grant.
+- **400 BAD_REQUEST** (non-JSON) / **413 PAYLOAD_TOO_LARGE** /
+  **422 VALIDATION_ERROR** (schema or amount/currency/status mismatch) /
+  **429 RATE_LIMITED**.
 
 ---
 
