@@ -52,9 +52,10 @@ Full decision history lives in `memory/decisions.md` (ADR-001…015).
 Day 1–5 features shipped + delivery-compliance + production-hardening
 passes. Full funnel loop runs end-to-end against Supabase: anonymous
 session → 6-step browser quiz → submit → calculator → gated teaser →
-mock `/pay` → full result. 222 unit tests green; live cookie-jar smoke
-covers happy + sad paths for every endpoint; eleven Codex reviews
-(000…010) Resolved; `npm audit --omit=dev` clean (Next.js 15.5.18 +
+mock `/pay` → full result. 224 unit tests green; live cookie-jar smoke
+covers happy + sad paths for every endpoint; the Codex review log
+(`docs/06-review-log.md`) is current through `review-012`, all
+Resolved; `npm audit --omit=dev` clean (Next.js 15.5.18 +
 pinned `postcss` override). Production-hardening pass adds baseline
 security response headers (XCTO / XFO / Referrer-Policy /
 Permissions-Policy / CSP frame-ancestors), `Cache-Control: private,
@@ -123,7 +124,7 @@ npm run dev   # http://localhost:3000
 | `npm run build` | `prisma generate` + `next build` (used on Vercel) |
 | `npm run start` | Production server (after `npm run build`) |
 | `npm run typecheck` | `tsc --noEmit` |
-| `npm test` | Vitest, 222 unit tests |
+| `npm test` | Vitest, 224 unit tests |
 | `npm run db:deploy` | `prisma migrate deploy` against `DIRECT_URL` |
 
 Node 20 LTS is pinned via `.nvmrc`.
@@ -332,7 +333,7 @@ sessionId，复制 README §Paid test session 的 cURL 段落即可
   (Supabase) + Vercel.
 • 匿名 session、HMAC-signed httpOnly cookie、server-side TTL。
 • 7 个 /api/v1 路由，全部 Zod 校验。
-• 222 个 vitest 单元 + 10 轮 Codex 评审全部 Resolved；`npm audit --omit=dev` 干净。
+• 224 个 vitest 单元；Codex 评审记录截至 review-012 全部 Resolved；`npm audit --omit=dev` 干净。
 • 评审记录: docs/06-review-log.md。
 
 期待反馈。

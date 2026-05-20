@@ -86,19 +86,29 @@ payment.
 - Browser pages → `app/page.tsx`, `app/funnel/**`, `app/pay/{page,PayButton}.tsx`, `app/results/page.tsx`
 - Step audit → `step_event` model + `20260519000000_add_step_event`
   migration (ADR-009 accepted on Day 5)
-- Test suite → `tests/**` (vitest, 222 tests on `feature/production-hardening`)
+- Test suite → `tests/**` (vitest, 224 tests on `feature/security-polish`)
 - ADR log → `memory/decisions.md` (ADR-001…015 Accepted)
 - Open questions → `memory/open-questions.md` (no open blocker)
-- Latest reviews → `reviews/review-011-production-hardening.md` (Resolved — I001/I002/N001/N002 all fixed on-branch after the `2dcbee6` review); `reviews/review-010-delivery-compliance.md` (Resolved at `a14b90f`); `reviews/review-009-security-hardening.md` (Resolved at `bcb4f2a`); `reviews/review-008-frontend-polish.md` (Resolved at `c974fbb`); `reviews/review-004-final.md` (Resolved at `f2b37f8`); earlier reviews are resolved for their branches.
+- Latest reviews → `reviews/review-012-security-polish.md` (Open at `ba15dac`, 0 Blocking / 1 Important / 0 Nice-to-have); `reviews/review-011-production-hardening.md` (Resolved at `06817a5`); `reviews/review-010-delivery-compliance.md` (Resolved at `a14b90f`); earlier reviews are resolved for their branches.
 
 ## Current Branch
 
-`feature/production-hardening` — post-delivery production-hardening
-branch (8 commits on top of the delivery-compliance merge at
-`cdd075d`). Bumps Next 14.2.15 → 15.5.18 (clears prod `npm audit` to
-0/0, including GHSA-26hh-7cqf-hhc6 and the nested-postcss XSS
-advisory via a top-level `overrides`), then layers five hardening
-changes:
+`feature/security-polish` — low-risk tester follow-up branch on top
+of merged production-hardening (`main` at `e8bfd14`). It adds one
+config-level header hardening and two documentation clarifications:
+
+- `next.config.mjs` sets `poweredByHeader: false`, so pages and
+  `/api/v1/*` responses no longer advertise `X-Powered-By: Next.js`.
+- `docs/08-security-hardening.md` §5 documents the mock-payment trust
+  boundary: browser-callable `/api/v1/pay` intentionally grants
+  entitlement for the interview demo; production would use a
+  provider webhook verified server-side.
+- `docs/08-security-hardening.md` §3.1 documents strict CSP as
+  post-MVP because naive `script-src`/nonce changes can break the
+  Next App Router without Report-Only/nonce plumbing and full browser
+  smoke.
+
+Inherited from production-hardening:
 
 - Baseline response headers via `next.config.mjs:headers()` —
   XCTO/XFO/Referrer-Policy/Permissions-Policy + a conservative
@@ -118,25 +128,14 @@ changes:
   Owner sets `APP_ORIGIN=https://project-u415a.vercel.app` on Vercel
   after merge.
 
-Docs synced: `docs/08` §3.1–§3.4 + §5 rate-limit deferral; `docs/04`
-413 row + Cache-Control bullet; `docs/02` §5 cross-ref; README status
-block bumped to Next 15 + 222 tests + audit clean.
-
-Tests 210 → 224. Codex review-011 at `2dcbee6` had 0 Blocking / 2
-Important / 2 Nice-to-have; all four are now fixed on-branch:
-- I001 — body-size cap re-checks `Buffer.byteLength(text, "utf8")`
-  (byte-accurate, not char count); docs reworded to "post-read cap".
-- I002 — Next 15 upgrade recorded as **ADR-015** (amends ADR-001
-  version only); ADR index/range bumped to ADR-001…015.
-- N001 — `APP_ORIGIN` rejects non-http(s) schemes (fail-fast).
-- N002 — `next.config.mjs:outputFileTracingRoot` silences the
-  multiple-lockfile build warning.
-
-Codex re-reviewed `06817a5`: verification passes (`tsc --noEmit`,
-`npm test` 224, `next build` with no lockfile warning,
-`npm audit --omit=dev` 0/0, `npx prisma validate`, `git diff --check`,
-`npm ls next postcss`). `reviews/review-011-production-hardening.md`
-is Resolved. The branch is mergeable from the review-011 perspective.
+Codex reviewed `ba15dac`: security-polish implementation is accepted
+and local header smoke confirms `X-Powered-By` is gone while baseline
+headers remain. Verification passes (`tsc --noEmit`, `npm test` 224,
+`next build`, `npm audit --omit=dev` 0/0, `npx prisma validate`,
+`git diff --check`). `reviews/review-012-security-polish.md` is Open
+with one Important finding: README still reports 222 tests and reviews
+000…010, so its headline/status needs to catch up to review-011 and
+the 224-test suite before merge.
 
 ## Code Management
 
