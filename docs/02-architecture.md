@@ -10,9 +10,9 @@
 > audit (T-502); cookie payload extended with `iat` for server-side TTL
 > (T-501, ADR-014).
 >
-> **Decision gate**: ADR-001…015 in `memory/decisions.md` are Accepted.
+> **Decision gate**: ADR-001…016 in `memory/decisions.md` are Accepted.
 
-## 0. Accepted decisions (ADR-001…015)
+## 0. Accepted decisions (ADR-001…016)
 
 The accepted decisions that frame this architecture live in
 `memory/decisions.md`. Short index — see ADR bodies for context,
@@ -35,6 +35,7 @@ rationale, and consequences:
 | ADR-013 | Demo language and calculator defaults: English copy + Mifflin-St Jeor formula | Accepted |
 | ADR-014 | Server-side cookie TTL via `iat` in HMAC payload (T-501) | Accepted |
 | ADR-015 | Framework patch baseline: Next.js 15.5.18 for prod audit hygiene (amends ADR-001 version only) | Accepted |
+| ADR-016 | Rate limiting: Postgres-backed best-effort fixed-window on hot write routes (reverses the earlier defer) | Accepted |
 
 ---
 
@@ -289,7 +290,7 @@ Each day ends at a Codex review trigger so quality is loaded throughout, not bol
 | R5 | Cookie identity = single device only; evaluator tries two browsers, gets confused | Low | Med | Documented limitation in README and §9. |
 | R6 | Vercel cold start makes first click feel broken | Low | Low | README tells the evaluator to hit `/healthz` first. |
 | R7 | Free-result endpoint leaks paid fields | Low | High | Two-serializer design + leak test in CI. |
-| R8 | Implementation starts before accepted ADRs are recorded → rework | Low | High | ADR-001…015 are accepted; future scope changes require new ADRs. |
+| R8 | Implementation starts before accepted ADRs are recorded → rework | Low | High | ADR-001…016 are accepted; future scope changes require new ADRs. |
 
 ---
 
@@ -307,7 +308,7 @@ Each day ends at a Codex review trigger so quality is loaded throughout, not bol
 | Email / notifications | No identity → no email. |
 | Admin dashboard | Not graded; Supabase SQL editor suffices. |
 | Sentry / APM | Vercel logs are enough for the demo window. |
-| Rate limiting beyond DB-enforced idempotency | In-memory limits are unreliable on serverless. `docs/08-security-hardening.md` §5 points to Upstash/Vercel KV throttling `/sessions` and `/pay` first as the prod path. |
+| ~~Rate limiting~~ — **now implemented** (ADR-016) | Postgres-backed best-effort fixed-window limiter on the hot write routes (`/sessions`, step PATCH, `/submit`, `/pay`); see `docs/08-security-hardening.md` §3.5. A dedicated store (Upstash/Vercel KV) remains the higher-throughput prod path but was not needed at demo scale. |
 | GraphQL / tRPC | Brief evaluates REST path/method design. Adding either would obscure that signal. |
 | Pre-seeded paid `sessionId` | Cookie-only auth makes a raw UUID unusable from outside the browser; replaced with a cURL cookie-jar walkthrough in the README. |
 | UUIDv7 | No measurable benefit at this scale; using `crypto.randomUUID()` instead. |

@@ -4,7 +4,7 @@
 
 Health quiz funnel full-stack challenge for Ruiqi Technology (睿迄科技).
 5-day delivery. MVP is merged to `main`; post-MVP security hardening is
-review-resolved on `feature/security-hardening` at `bcb4f2a`. ADR-001…015
+review-resolved on `feature/security-hardening` at `bcb4f2a`. ADR-001…016
 are Accepted.
 
 ## Final Goal
@@ -86,55 +86,52 @@ payment.
 - Browser pages → `app/page.tsx`, `app/funnel/**`, `app/pay/{page,PayButton}.tsx`, `app/results/page.tsx`
 - Step audit → `step_event` model + `20260519000000_add_step_event`
   migration (ADR-009 accepted on Day 5)
-- Test suite → `tests/**` (vitest, 228 tests on `feature/landing-cta`)
-- ADR log → `memory/decisions.md` (ADR-001…015 Accepted)
+- Test suite → `tests/**` (vitest, 240 tests on `feature/rate-limit`)
+- ADR log → `memory/decisions.md` (ADR-001…016 Accepted)
 - Open questions → `memory/open-questions.md` (no open blocker)
-- Latest reviews → `reviews/review-013-landing-cta.md` (Resolved at `f3ea061`); `reviews/review-012-security-polish.md` (Resolved); `reviews/review-011-production-hardening.md` (Resolved at `06817a5`); earlier reviews are resolved for their branches.
+- Latest reviews → `reviews/review-014-rate-limit.md` (Resolved — N001 precision cleanup fixed on-branch after `b2403a1`); `reviews/review-013-landing-cta.md` (Resolved at `f3ea061`, merged); `reviews/review-012-security-polish.md` (Resolved); `reviews/review-011-production-hardening.md` (Resolved at `06817a5`); earlier reviews are resolved for their branches.
 
 ## Current Branch
 
-`feature/landing-cta` — state-aware landing CTA branch on top of
-merged security-polish (`main` at `36d78e8`). It fixes the misleading
-"Start the quiz" label for returning sessions:
+`feature/rate-limit` — adds rate limiting on the hot write routes
+(ADR-016), off `main` @ `bf182d6` (landing-cta + security-polish +
+production-hardening + delivery-compliance all merged). Reverses the
+earlier "rate limiting deferred" non-goal at Owner's request.
 
-- `app/page.tsx` is now a dynamic server component that reads the
-  signed session cookie and renders the CTA that matches actual
-  routing behaviour.
-- `lib/landing-cta.ts:resolveLandingCta` is the pure decision seam:
-  no session / empty draft → Start, draft with progress → Continue,
-  submitted → View results.
-- `tests/lib/landing-cta.test.ts` covers the four state branches.
-- `memory/open-questions.md` Q-007 records the explicit restart/start
-  over option as deferred; the visitor-table model is the ADR-016
-  candidate if revived.
+- Postgres-backed best-effort fixed-window limiter
+  (`lib/api/rate-limit.ts`) on `POST /sessions`, step `PATCH`,
+  `POST /submit`, `POST /pay`. New `rate_limit` operational table +
+  migration `20260521000000_add_rate_limit` (5 domain + 1 operational
+  table). Owner applies it via `npm run db:deploy` at/before deploy.
+- Key = keyed HMAC-SHA256 (peppered with `SESSION_COOKIE_SECRET`) of
+  IP + session id + UA per route per 60s window (no raw IP/UA stored).
+  Fail-open on store error. `429 RATE_LIMITED` +
+  `Retry-After`. Limits/identity: sessions 20, steps 80, submit 15,
+  pay 15. Opportunistic prune (~2%) bounds the table.
+- Pure helpers + a `RateLimitStore` seam → `tests/lib/api/rate-limit.test.ts`
+  (12 cases) exercise the flow with an in-memory store; the Prisma
+  upsert adapter is the only I/O. Used Prisma upsert (not raw SQL) to
+  keep the docs/08 "exactly one $queryRaw" claim true.
+- Docs synced: ADR-016; `docs/08` §3.5 + §5 + changelog; `docs/04`
+  429 enforced; `docs/02` §0/§9; `docs/03` §1 operational table;
+  `docs/07`; `docs/05` Phase-1 reconciliation; README. Q-007's
+  "ADR-016 candidate" wording fixed (ADR-016 is now the limiter).
 
-Inherited from production-hardening:
+Verification: `tsc --noEmit` clean, `npm test` 240 green,
+`next build` clean, `npx prisma validate` clean, `git diff --check`
+clean. Codex review-014: 0 Blocking/Important; the one Nice-to-have
+(N001) is fixed on-branch — `identityHash` is now a real keyed HMAC
+(peppered with `SESSION_COOKIE_SECRET`, was a plain SHA-256 mislabelled
+"salted"), and the `docs/08` `$queryRaw` citation corrected
+`lib/payment.ts:183` → `:200`. `reviews/review-014-rate-limit.md` is
+Resolved. The branch is mergeable from the review-014 perspective.
 
-- Baseline response headers via `next.config.mjs:headers()` —
-  XCTO/XFO/Referrer-Policy/Permissions-Policy + a conservative
-  `frame-ancestors 'none'; object-src 'none'; base-uri 'self';
-  form-action 'self'` CSP that intentionally avoids `script-src`
-  guesses.
-- `Cache-Control: private, no-store, max-age=0` on every
-  personalised + error response (`lib/api/cache-control.ts` +
-  `jsonError()`); `/healthz` stays cacheable.
-- 16 KB body-size cap with `413 PAYLOAD_TOO_LARGE` enforced in
-  `lib/api/parse-body.ts` (declared `Content-Length` checked up
-  front + actual body length re-checked).
-- 512-char User-Agent truncation at `createSession` ingest
-  (`lib/session.ts:truncateUserAgent`).
-- `APP_ORIGIN` env allowlist for `lib/internal-fetch.ts:internalUrl()`,
-  with a forwarded-host fallback so cURL/local-dev keep working.
-  Owner sets `APP_ORIGIN=https://project-u415a.vercel.app` on Vercel
-  after merge.
-
-Codex reviewed `f3ea061`: `reviews/review-013-landing-cta.md` is
-Resolved with no findings. Verification passes (`tsc --noEmit`,
-`npm test` 228, `next build`, `npx prisma validate`,
-`git diff --check`). Local cookie-jar smoke confirms landing CTA
-states: no cookie → Start, empty draft → Start, draft progress →
-Continue, submitted → View results. The branch is mergeable from the
-landing-CTA review perspective.
+Prior post-MVP work (all merged to `main`): state-aware landing CTA
+(review-013), security-polish — `poweredByHeader: false` + mock-payment
+boundary + CSP-deferral docs (review-012), and production-hardening —
+Next 15.5.18, baseline security headers, `Cache-Control: no-store`,
+16 KB body cap, UA truncation, `APP_ORIGIN` allowlist (review-011).
+Owner sets `APP_ORIGIN=https://project-u415a.vercel.app` on Vercel.
 
 ## Code Management
 

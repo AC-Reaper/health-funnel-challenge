@@ -42,7 +42,7 @@ state-changing.
 | `/pay` already-paid new-key silent no-op | `lib/payment.ts:decidePaymentAction` (ADR-012) | `tests/lib/payment.test.ts` ("already-paid + NEW key → silent no-op") + DB partial unique index `payment_one_success_per_session_idx` |
 | `/pay` SELECT … FOR UPDATE per-session serialization | `lib/payment.ts:processPayment` | Live cookie-jar smoke + payment-table row-count assertions |
 | `step_event` audit row written inside the same PATCH transaction | `lib/step-repo.ts:runStepsTransaction` (ADR-009, T-502) | `tests/lib/step-repo.test.ts` (success path + rollback path) |
-| Parameterized SQL — no raw user input concatenation | All DB writes go through Prisma's query-builder (parameterized by construction). Exactly **one** `$queryRaw` callsite exists in app / lib / prisma / tests code: `lib/payment.ts:183` runs `tx.$queryRaw\`SELECT id FROM "session" WHERE id = ${sessionId}::uuid FOR UPDATE\`` as the ADR-006 per-session lock for `/pay`. Prisma's **tagged-template** form parameterizes `${sessionId}` as a bound prepared-statement value — it is not string-concatenated. The `sessionId` value comes from `verifyCookie(...)` (HMAC-validated), not from the request body. | Reproducer: `rg -n '\$queryRaw\|\$executeRaw' app lib prisma tests --glob '!node_modules' --glob '!package-lock.json'` returns exactly that one site; inspect it to confirm the `${sessionId}` interpolation is a bound parameter, not concatenation. |
+| Parameterized SQL — no raw user input concatenation | All DB writes go through Prisma's query-builder (parameterized by construction). Exactly **one** `$queryRaw` callsite exists in app / lib / prisma / tests code: `lib/payment.ts:200` runs `tx.$queryRaw\`SELECT id FROM "session" WHERE id = ${sessionId}::uuid FOR UPDATE\`` as the ADR-006 per-session lock for `/pay`. Prisma's **tagged-template** form parameterizes `${sessionId}` as a bound prepared-statement value — it is not string-concatenated. The `sessionId` value comes from `verifyCookie(...)` (HMAC-validated), not from the request body. | Reproducer: `rg -n '\$queryRaw\|\$executeRaw' app lib prisma tests --glob '!node_modules' --glob '!package-lock.json'` returns exactly that one site; inspect it to confirm the `${sessionId}` interpolation is a bound parameter, not concatenation. |
 | Same-origin guard on mutating routes (host + conditional scheme) | `lib/api/same-origin.ts` (this branch). Host comparison is always enforced; scheme comparison is enforced when `x-forwarded-proto` is present (Vercel sets it), and falls back to host-only when absent (cURL / local dev). Rejection envelope is `403 FORBIDDEN_ORIGIN`. | `tests/lib/api/same-origin.test.ts` (11 cases incl. scheme mismatch, forwarded-proto chain, fallback) |
 | `Idempotency-Key` restricted to printable ASCII | `lib/api/idempotency-key.ts` (this branch) | `tests/lib/api/idempotency-key.test.ts` (11 cases) |
 
@@ -76,7 +76,7 @@ a committed regression. No "verified in design only" rows.
 | Cross-origin browser POST (host mismatch) | `tests/lib/api/same-origin.test.ts` | 403 FORBIDDEN_ORIGIN on host mismatch |
 | Cross-scheme POST (http origin against TLS-terminated host) | `tests/lib/api/same-origin.test.ts` | 403 FORBIDDEN_ORIGIN when `x-forwarded-proto` is present and `URL(origin).protocol` differs |
 | `Origin: null` / malformed | `tests/lib/api/same-origin.test.ts` | rejected |
-| SQL injection via body | All DB writes go through Prisma's parameterized query-builder. The **only** `$queryRaw` callsite in app / lib / prisma / tests is `lib/payment.ts:183` — the per-session lock `SELECT id FROM "session" WHERE id = ${sessionId}::uuid FOR UPDATE` — and it uses Prisma's tagged-template form (so `${sessionId}` is bound, not concatenated). The `sessionId` value comes from `verifyCookie`, not the request body. | `rg -n '\$queryRaw\|\$executeRaw' app lib prisma tests --glob '!node_modules' --glob '!package-lock.json'` returns exactly that one site; the §2 row walks through it. |
+| SQL injection via body | All DB writes go through Prisma's parameterized query-builder. The **only** `$queryRaw` callsite in app / lib / prisma / tests is `lib/payment.ts:200` — the per-session lock `SELECT id FROM "session" WHERE id = ${sessionId}::uuid FOR UPDATE` — and it uses Prisma's tagged-template form (so `${sessionId}` is bound, not concatenated). The `sessionId` value comes from `verifyCookie`, not the request body. | `rg -n '\$queryRaw\|\$executeRaw' app lib prisma tests --glob '!node_modules' --glob '!package-lock.json'` returns exactly that one site; the §2 row walks through it. |
 
 ## 3.1 Response headers + caching (production-hardening branch)
 
@@ -160,6 +160,33 @@ moderate XSS-in-CSS-Stringify advisory drops out of the prod tree.
 
 Reproducer: `npm audit --omit=dev` → "found 0 vulnerabilities".
 
+## 3.5 Rate limiting (ADR-016)
+
+Best-effort, **Postgres-backed** fixed-window limiter on the hot write
+routes — `POST /api/v1/sessions`, step `PATCH`, `POST /submit`,
+`POST /pay` (`lib/api/rate-limit.ts`). Read routes and `/healthz` are
+not limited.
+
+| Property | Choice | Why |
+| - | - | - |
+| Store | `rate_limit` table (Supabase/Prisma) | Shared across Vercel's many short-lived instances; an in-memory counter would be per-instance and reset on cold start. No new external dependency. |
+| Key | Keyed **HMAC-SHA256** (peppered with `SESSION_COOKIE_SECRET`) of client IP (left-most `x-forwarded-for`) + session id (when present) + User-Agent, per route per window | Composite identity; **no raw IP/UA is persisted** (only the keyed hash). The pepper means a leaked `rate_limit` row can't be brute-forced back to an IP/UA without the server secret. |
+| Algorithm | Fixed window, `count` via Prisma upsert+increment | Simple + atomic-enough; a tiny under-count race under heavy concurrency is acceptable for a throttle. |
+| On store error | **Fail-open** (allow) | A limiter outage must never break the demo loop. |
+| Breach response | `429 RATE_LIMITED` + `Retry-After` | `ERROR_CODES.RATE_LIMITED` (previously reserved). |
+| Limits (per 60s/identity) | sessions 20, steps 80, submit 15, pay 15 | Generous for the 6-step browser flow + edits + README cURL walkthrough; tight enough to throttle scripted abuse. |
+| Cleanup | opportunistic prune of expired rows (~2% of calls) | Bounds table growth without a cron; `expires_at` is indexed for a scheduled sweep if desired. |
+
+Honest scope: this bounds a single IP/UA/cookie identity per window. A
+hard global guarantee under a large botnet would still want a dedicated
+store (Upstash/Vercel KV) — noted as the higher-throughput prod path,
+not needed at demo scale.
+
+Tests: `tests/lib/api/rate-limit.test.ts` (pure window/key/identity
+helpers + an in-memory `RateLimitStore`: under-limit pass, over-limit
+429 + `Retry-After`, fail-open on store error, window rollover reset,
+per-identity isolation).
+
 ## 4. Day-5 / post-MVP additions changelog
 
 - **ADR-014** — server-side cookie TTL via `iat` + 30d expiry + 60s
@@ -178,6 +205,9 @@ Reproducer: `npm audit --omit=dev` → "found 0 vulnerabilities".
 - **Security-polish branch** — `poweredByHeader: false` (drops
   `X-Powered-By`), documented mock-payment trust boundary (§5) and
   the post-MVP strict-CSP plan (§3.1).
+- **Rate-limit branch (ADR-016)** — Postgres-backed best-effort
+  fixed-window limiter on `/sessions`, step PATCH, `/submit`, `/pay`
+  (§3.5). Reverses the earlier "rate limiting deferred" non-goal.
 
 ## 5. Intentionally out of scope
 
@@ -206,14 +236,12 @@ later, they are documented elsewhere as known follow-ups.
   documented post-MVP swap that reuses the existing idempotency-key +
   DB-unique-constraint shape (the `/pay` handler would become the
   webhook handler).
-- **Rate limiting**. Vercel serverless invalidates in-memory limiters
-  (different instances per request). The production path is
-  Upstash / Vercel KV — throttle `/api/v1/sessions` (anonymous
-  session creation) and `/api/v1/pay` (the only high-cost write)
-  first; the rest of the surface is cookie-scoped and self-limiting.
-  Deferred from the production-hardening branch on purpose: wiring
-  a real KV at the eleventh hour risks destabilising `/pay`, which
-  has more value than catching the unlikely brute-force scenario.
+- **Rate limiting** — **now implemented** (ADR-016, §3.5): a
+  Postgres-backed best-effort fixed-window limiter on `/sessions`, step
+  PATCH, `/submit`, and `/pay`. Still out of scope: a dedicated
+  distributed store (Upstash / Vercel KV) for hard global guarantees
+  under large-scale abuse — the higher-throughput prod path, not needed
+  at demo scale.
 - **WAF / captcha / bot detection**. Not graded. Adding them would
   obscure the hand-rolled controls the brief actually evaluates.
 - **User-data export / deletion endpoints (GDPR-style)**. No PII is

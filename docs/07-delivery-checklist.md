@@ -10,11 +10,12 @@
 
 ## Product / docs
 
-- [x] `02-architecture.md` v2 reflects accepted design (ADR-001…014)
-- [x] `03-database-design.md` matches the shipped 5-table Prisma schema
-      + ER Mermaid (incl. `step_event`)
+- [x] `02-architecture.md` v2 reflects accepted design (ADR-001…016)
+- [x] `03-database-design.md` matches the shipped schema — 5 domain
+      tables + the operational `rate_limit` table (ADR-016) + ER
+      Mermaid (incl. `step_event`)
 - [x] `04-api-design.md` matches the seven shipped endpoints + ADR-014
-      cookie TTL
+      cookie TTL + `429 RATE_LIMITED` (ADR-016)
 - [x] `05-ai-collaboration-log.md` has substantive per-phase entries
 - [x] `06-review-log.md` is current through the latest review
       (reviews 000…013 all `Resolved` or
@@ -33,8 +34,9 @@
       `test`, `typecheck` scripts (no `lint` script — `tsc --noEmit`
       is the type/correctness gate; no ESLint was wired in for the
       demo window)
-- [x] `prisma/schema.prisma` + two migrations applied to Supabase
-      (`20260518000000_init`, `20260519000000_add_step_event`)
+- [x] `prisma/schema.prisma` + three migrations applied to Supabase
+      (`20260518000000_init`, `20260519000000_add_step_event`,
+      `20260521000000_add_rate_limit`)
 - [x] All `/api/v1` endpoints behind a Zod schema
 - [x] Two-serializer leak test asserts paid fields absent from teaser
       (`tests/lib/serializers/result.test.ts`)
@@ -50,7 +52,7 @@
       `tests/lib/validation/assessment.test.ts`,
       `tests/lib/health/calculator.test.ts`)
 - [x] No `any` without justification; `tsc --noEmit` clean
-- [x] 210 vitest tests green
+- [x] 240 vitest tests green
 
 ### Security
 
@@ -68,6 +70,10 @@
       surface, control evidence table, and out-of-scope rationale
 - [x] Logical model mapping (User / Subscription / Payment) in
       `docs/03-database-design.md` §2.1
+- [x] Rate limiting on hot write routes — Postgres-backed best-effort
+      fixed-window (`lib/api/rate-limit.ts`, ADR-016); `/sessions`,
+      step PATCH, `/submit`, `/pay`; `429 RATE_LIMITED` + `Retry-After`;
+      12 cases in `tests/lib/api/rate-limit.test.ts`
 
 ## Deploy / demo
 

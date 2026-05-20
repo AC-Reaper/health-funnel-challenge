@@ -108,12 +108,13 @@ Reason / analysis:
     `submitted`/`result`/`payment` while allowing a new attempt; the
     index bounds drafts **per identified visitor** (does not stop
     new-visitor spam). This is the architecturally correct production
-    shape and the **ADR-016 candidate** if revived. It also un-collapses
-    the `User → session` mapping recorded in `docs/03` §2.1.
+    shape and a **future-ADR candidate** if revived (ADR-016 was since
+    taken by the rate-limiter decision). It also un-collapses the
+    `User → session` mapping recorded in `docs/03` §2.1.
 - For a delivered, live, 5-day interview demo, a 5th table + migration +
   cookie/identity change (touching ADR-004) is disproportionate to a
   UX-label report. Logged here rather than built.
 
 If revived:
-Implement the `visitor` model on a fresh branch as ADR-016, with a
+Implement the `visitor` model on a fresh branch as a new ADR, with a
 Codex review, and reconcile `docs/03` §2.1 + ADR-004/007.

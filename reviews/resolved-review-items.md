@@ -893,3 +893,13 @@ Source: `reviews/review-012-security-polish.md` (0 Blocking, 1 Important, 0 Nice
 - **I001 — README headline reported pre-review-011 test/review state** → `README.md` updated in three places: status block (`222` → `224` tests; "eleven Codex reviews (000…010) Resolved" → "the Codex review log (`docs/06-review-log.md`) is current through `review-012`, all Resolved"), the commands table `npm test` row (222 → 224), and the Chinese submission summary (`222 个 vitest … + 10 轮 Codex` → `224 个 vitest … Codex 评审记录截至 review-012 全部 Resolved`). Per Codex's churn-reduction suggestion, the review state is now phrased as "current through `review-NNN`" + a pointer to the review log instead of a hard-coded round count repeated across the file.
 
 Verification after fix: `tsc --noEmit`, `npm test` (224 green), `next build`, `npm audit --omit=dev` (0/0), `npx prisma validate`, `git diff --check` all clean.
+
+## review-014 (rate-limit) findings
+
+Source: `reviews/review-014-rate-limit.md` (0 Blocking, 0 Important, 1 Nice-to-have).
+
+- **N001 — security-proof precision drift (two spots)** →
+  - `identityHash()` comment claimed "Salted SHA-256" but the impl used a plain `createHash`. Made it true: switched to `createHmac("sha256", env.SESSION_COOKIE_SECRET)` — a keyed/peppered hash with the same server secret `lib/session.ts` signs cookies with, so a leaked `rate_limit` row can't be brute-forced back to an IP/UA without the secret. Comment rewritten; the "no raw IP/UA stored" property is unchanged. Descriptions aligned in `docs/08` §3.5, `docs/03` §1, `prisma/schema.prisma`, ADR-016, and shared-memory.
+  - `docs/08` cited the lone `$queryRaw` at `lib/payment.ts:183`; the rate-limit edits shifted it to `lib/payment.ts:200`. Updated both citations (§2 + §3 test-proof table). Still exactly one raw-SQL callsite (the rate limiter uses Prisma upsert, not raw).
+
+Verification after fix: `tsc --noEmit` clean, `npm test` 240 green, `git diff --check` clean. No behaviour change (HMAC output is still 32 hex chars; identity stability/uniqueness tests hold).

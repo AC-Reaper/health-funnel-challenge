@@ -4,6 +4,7 @@ import { z } from "zod";
 
 import { withNoStore } from "@/lib/api/cache-control";
 import { internalError } from "@/lib/api/errors";
+import { checkRateLimit } from "@/lib/api/rate-limit";
 import { parseJsonBody } from "@/lib/api/parse-body";
 import { getRequestId } from "@/lib/api/request-id";
 import { checkSameOrigin } from "@/lib/api/same-origin";
@@ -33,11 +34,14 @@ export async function POST(req: Request) {
   if (!originCheck.ok) return originCheck.res;
 
   try {
-    const parsed = await parseJsonBody(req, PostSessionsBody, requestId);
-    if (!parsed.ok) return parsed.res;
-
     const raw = (await cookies()).get(COOKIE_NAME)?.value;
     const existingSid = verifyCookie(raw);
+
+    const rl = await checkRateLimit(req, "sessions", requestId, existingSid);
+    if (!rl.ok) return rl.res;
+
+    const parsed = await parseJsonBody(req, PostSessionsBody, requestId);
+    if (!parsed.ok) return parsed.res;
 
     if (existingSid) {
       const session = await findSessionById(existingSid);
