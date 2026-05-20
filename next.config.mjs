@@ -1,3 +1,6 @@
+import { fileURLToPath } from "node:url";
+import { dirname } from "node:path";
+
 /** @type {import('next').NextConfig} */
 
 // Baseline response headers applied to every route. Conservative CSP:
@@ -22,6 +25,10 @@ const SECURITY_HEADERS = [
 ];
 
 const nextConfig = {
+  // Pin the file-tracing root to this package so Next 15 doesn't warn
+  // about (and mis-infer) a parent-directory lockfile as the workspace
+  // root. The repo is the self-contained tracing root.
+  outputFileTracingRoot: dirname(fileURLToPath(import.meta.url)),
   async headers() {
     return [{ source: "/:path*", headers: SECURITY_HEADERS }];
   },

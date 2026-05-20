@@ -45,7 +45,7 @@ See `PROJECT_BRIEF.md` for the scoring criteria and MVP boundary, and
 | Payment | Fully mocked `POST /api/v1/pay` with `Idempotency-Key` | Brief asks for mock; replay-safe by DB unique constraint. |
 | Hosting | Vercel (app) + Supabase (DB) | Free tier; public HTTPS URL out of the box; no VPS required. |
 
-Full decision history lives in `memory/decisions.md` (ADR-001…014).
+Full decision history lives in `memory/decisions.md` (ADR-001…015).
 
 ## Status
 
@@ -68,7 +68,7 @@ table.
 
 | Day | What lands here |
 | - | - |
-| Day 1 | ✅ `package.json` + Prisma schema + first migration (`feature/db-schema`, merged). ✅ Next.js 14 App Router skeleton + `lib/session.ts` + first 3 endpoints (`feature/session-progress-api`, merged after live Supabase smoke). |
+| Day 1 | ✅ `package.json` + Prisma schema + first migration (`feature/db-schema`, merged). ✅ Next.js App Router skeleton (scaffolded on 14; upgraded to 15.5.18 during production-hardening, ADR-015) + `lib/session.ts` + first 3 endpoints (`feature/session-progress-api`, merged after live Supabase smoke). |
 | Day 2 | ✅ Zod step schemas + `PATCH /api/v1/sessions/me/steps/:stepKey` with first-incomplete-step + weight-coherence rules + vitest with 108 unit tests (`feature/funnel-persistence-api`, merged). |
 | Day 3 | ✅ Pure health calculator (`lib/health/calculator.ts`) + `POST /api/v1/sessions/me/submit` + two-serializer `GET /api/v1/results/me` (leak-tested) + mock `POST /api/v1/pay` with `Idempotency-Key` + minimal `/pay` and `/results` browser pages (`feature/assessment-result-api`, merged after review-006 closeout). |
 | Day 4 | ✅ Polished funnel UI (`/funnel` server-bootstrapped stepper, Tailwind), `/pay` UX gate on `GET /results/me` (closes review-006 N003), `/results` restyle, Vercel + Supabase deploy, cookie-jar cURL walkthrough below (`feature/frontend-funnel`). |

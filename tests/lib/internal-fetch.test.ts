@@ -55,4 +55,11 @@ describe("internalUrl()", () => {
     process.env.APP_ORIGIN = "not a url";
     await expect(internalUrl("/api/v1/healthz")).rejects.toThrow();
   });
+
+  it("rejects a non-http(s) APP_ORIGIN scheme (fail-fast)", async () => {
+    process.env.APP_ORIGIN = "javascript:alert(1)";
+    await expect(internalUrl("/api/v1/healthz")).rejects.toThrow(
+      /http\(s\) origin/,
+    );
+  });
 });

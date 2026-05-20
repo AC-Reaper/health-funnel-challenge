@@ -4,7 +4,7 @@
 
 Health quiz funnel full-stack challenge for Ruiqi Technology (睿迄科技).
 5-day delivery. MVP is merged to `main`; post-MVP security hardening is
-review-resolved on `feature/security-hardening` at `bcb4f2a`. ADR-001…014
+review-resolved on `feature/security-hardening` at `bcb4f2a`. ADR-001…015
 are Accepted.
 
 ## Final Goal
@@ -17,7 +17,8 @@ payment.
 
 ## Confirmed Tech Stack
 
-- Next.js 14 App Router (UI + API route handlers)
+- Next.js 15 App Router (UI + API route handlers; initially
+  scaffolded on Next 14, upgraded during production-hardening)
 - TypeScript (strict)
 - Prisma + PostgreSQL on Supabase (Free tier)
 - Zod at every API boundary
@@ -85,10 +86,10 @@ payment.
 - Browser pages → `app/page.tsx`, `app/funnel/**`, `app/pay/{page,PayButton}.tsx`, `app/results/page.tsx`
 - Step audit → `step_event` model + `20260519000000_add_step_event`
   migration (ADR-009 accepted on Day 5)
-- Test suite → `tests/**` (vitest, 210 tests on `feature/delivery-compliance-hardening`)
-- ADR log → `memory/decisions.md` (ADR-001…014 Accepted)
+- Test suite → `tests/**` (vitest, 222 tests on `feature/production-hardening`)
+- ADR log → `memory/decisions.md` (ADR-001…015 Accepted)
 - Open questions → `memory/open-questions.md` (no open blocker)
-- Latest reviews → `reviews/review-010-delivery-compliance.md` (Resolved at `a14b90f`); `reviews/review-009-security-hardening.md` (Resolved at `bcb4f2a`); `reviews/review-008-frontend-polish.md` (Resolved at `c974fbb`); `reviews/review-004-final.md` (Resolved at `f2b37f8`); `reviews/review-007-browser-smoke.md` (Resolved); `reviews/review-006-day3.md` (Resolved); `reviews/review-002-api.md` and `reviews/review-003-db.md` are resolved for earlier branches.
+- Latest reviews → `reviews/review-011-production-hardening.md` (Resolved — I001/I002/N001/N002 all fixed on-branch after the `2dcbee6` review); `reviews/review-010-delivery-compliance.md` (Resolved at `a14b90f`); `reviews/review-009-security-hardening.md` (Resolved at `bcb4f2a`); `reviews/review-008-frontend-polish.md` (Resolved at `c974fbb`); `reviews/review-004-final.md` (Resolved at `f2b37f8`); earlier reviews are resolved for their branches.
 
 ## Current Branch
 
@@ -121,10 +122,20 @@ Docs synced: `docs/08` §3.1–§3.4 + §5 rate-limit deferral; `docs/04`
 413 row + Cache-Control bullet; `docs/02` §5 cross-ref; README status
 block bumped to Next 15 + 222 tests + audit clean.
 
-Tests 210 → 222. `tsc --noEmit`, `npm test`, `next build`, `npm audit
---omit=dev`, and `npx prisma validate` all clean. No Codex review on
-this branch yet — Owner decides whether to request review-011 or
-merge directly.
+Tests 210 → 224. Codex review-011 at `2dcbee6` had 0 Blocking / 2
+Important / 2 Nice-to-have; all four are now fixed on-branch:
+- I001 — body-size cap re-checks `Buffer.byteLength(text, "utf8")`
+  (byte-accurate, not char count); docs reworded to "post-read cap".
+- I002 — Next 15 upgrade recorded as **ADR-015** (amends ADR-001
+  version only); ADR index/range bumped to ADR-001…015.
+- N001 — `APP_ORIGIN` rejects non-http(s) schemes (fail-fast).
+- N002 — `next.config.mjs:outputFileTracingRoot` silences the
+  multiple-lockfile build warning.
+
+Verification passes: `tsc --noEmit`, `npm test` (224), `next build`
+(no lockfile warning), `npm audit --omit=dev` (0/0), `npx prisma
+validate`, `git diff --check`. The branch is mergeable from the
+review-011 perspective.
 
 ## Code Management
 

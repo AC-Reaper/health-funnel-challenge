@@ -106,6 +106,29 @@ describe("parseJsonBody", () => {
     expect(body.error.code).toBe("PAYLOAD_TOO_LARGE");
   });
 
+  it("rejects with 413 when a multibyte body exceeds the byte cap under the char count", async () => {
+    // "€" is 1 UTF-16 code unit but 3 UTF-8 bytes. Pick a count that
+    // keeps text.length <= MAX_BODY_BYTES while pushing the UTF-8 byte
+    // length over it — proves the cap is byte-accurate, not char-based.
+    const euros = "€".repeat(Math.ceil(MAX_BODY_BYTES / 2));
+    expect(euros.length).toBeLessThanOrEqual(MAX_BODY_BYTES);
+    const oversized = JSON.stringify({ name: euros, age: 1 });
+    expect(Buffer.byteLength(oversized, "utf8")).toBeGreaterThan(
+      MAX_BODY_BYTES,
+    );
+    const req = new Request("http://localhost/api/v1/test", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: oversized,
+    });
+    const result = await parseJsonBody(req, schema, REQUEST_ID);
+    expect(result.ok).toBe(false);
+    if (result.ok) return;
+    expect(result.res.status).toBe(413);
+    const body = await result.res.json();
+    expect(body.error.code).toBe("PAYLOAD_TOO_LARGE");
+  });
+
   it("accepts bodies just under the cap", async () => {
     // Build a JSON body that fits within MAX_BODY_BYTES end-to-end.
     const padding = "y".repeat(MAX_BODY_BYTES - 64);

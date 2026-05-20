@@ -10,9 +10,9 @@
 > audit (T-502); cookie payload extended with `iat` for server-side TTL
 > (T-501, ADR-014).
 >
-> **Decision gate**: ADR-001…014 in `memory/decisions.md` are Accepted.
+> **Decision gate**: ADR-001…015 in `memory/decisions.md` are Accepted.
 
-## 0. Accepted decisions (ADR-001…014)
+## 0. Accepted decisions (ADR-001…015)
 
 The accepted decisions that frame this architecture live in
 `memory/decisions.md`. Short index — see ADR bodies for context,
@@ -20,7 +20,7 @@ rationale, and consequences:
 
 | ADR | Decision | Status |
 | - | - | - |
-| ADR-001 | Web stack: Next.js 14 App Router + TypeScript, single repo | Accepted |
+| ADR-001 | Web stack: Next.js App Router + TypeScript, single repo (scaffolded on 14; version baseline now ADR-015) | Accepted |
 | ADR-002 | DB + ORM: PostgreSQL on Supabase + Prisma | Accepted |
 | ADR-003 | Deploy: Vercel (app) + Supabase (DB) | Accepted |
 | ADR-004 | Identity: anonymous signed httpOnly cookie holding `crypto.randomUUID()` | Accepted |
@@ -34,6 +34,7 @@ rationale, and consequences:
 | ADR-012 | Payment replay: already-paid sessions silently no-op for new `Idempotency-Key` | Accepted |
 | ADR-013 | Demo language and calculator defaults: English copy + Mifflin-St Jeor formula | Accepted |
 | ADR-014 | Server-side cookie TTL via `iat` in HMAC payload (T-501) | Accepted |
+| ADR-015 | Framework patch baseline: Next.js 15.5.18 for prod audit hygiene (amends ADR-001 version only) | Accepted |
 
 ---
 
@@ -281,7 +282,7 @@ Each day ends at a Codex review trigger so quality is loaded throughout, not bol
 | R5 | Cookie identity = single device only; evaluator tries two browsers, gets confused | Low | Med | Documented limitation in README and §9. |
 | R6 | Vercel cold start makes first click feel broken | Low | Low | README tells the evaluator to hit `/healthz` first. |
 | R7 | Free-result endpoint leaks paid fields | Low | High | Two-serializer design + leak test in CI. |
-| R8 | Implementation starts before accepted ADRs are recorded → rework | Low | High | ADR-001…014 are accepted; future scope changes require new ADRs. |
+| R8 | Implementation starts before accepted ADRs are recorded → rework | Low | High | ADR-001…015 are accepted; future scope changes require new ADRs. |
 
 ---
 

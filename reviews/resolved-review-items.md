@@ -874,3 +874,14 @@ Items from Owner's post-delivery-compliance prioritised list (accepted
 Rate limiting was raised in the same list and explicitly deferred by Owner. The rationale + path forward (Upstash/Vercel KV; throttle `/api/v1/sessions` and `/api/v1/pay` first) lives in `docs/08-security-hardening.md` §5.
 
 Branch state at closeout: 8 commits, 210 → 222 tests, `tsc --noEmit` / `npm test` / `next build` / `npm audit --omit=dev` / `npx prisma validate` all clean.
+
+## review-011 (production-hardening) findings
+
+Source: `reviews/review-011-production-hardening.md` (0 Blocking, 2 Important, 2 Nice-to-have).
+
+- **I001 — body cap claimed byte-accurate but checked char length** → `lib/api/parse-body.ts` now compares `Buffer.byteLength(text, "utf8")` instead of `text.length`. Comment + `docs/08` §3.2 reworded to call this a post-read cap (the declared `Content-Length` check is the cheap early-rejection path). New regression: a "€"-filled body whose char count is under the cap but whose UTF-8 byte length is over it returns 413 (`tests/lib/api/parse-body.test.ts`). Tests 222 → 223.
+- **I002 — Next 15 upgrade not recorded as an ADR** → new **ADR-015** ("Framework patch baseline: Next.js 15.5.18 for prod audit hygiene", amends ADR-001 version only) in `memory/decisions.md`. ADR index in `docs/02` gains the row + ADR-001 annotated; ADR range bumped to ADR-001…015 across `docs/02`, `README`, `memory/shared-memory.md`; README Day-1 row notes the upgrade.
+- **N001 — APP_ORIGIN should reject non-http(s) schemes** → `lib/internal-fetch.ts` now throws unless `url.protocol` is `http:`/`https:` (rejects `javascript:`/`data:`, which parse to an `"null"` origin). New test for `javascript:alert(1)` (`tests/lib/internal-fetch.test.ts`). `docs/08` §3.3 updated. Tests 223 → 224.
+- **N002 — Next build multiple-lockfile warning** → `next.config.mjs` sets `outputFileTracingRoot` to the package dir (`dirname(fileURLToPath(import.meta.url))`); the warning is gone from `npm run build`.
+
+Verification after fixes: `tsc --noEmit`, `npm test` (224 green), `next build` (no lockfile warning), `npm audit --omit=dev` (0/0), `npx prisma validate`, `git diff --check` all clean.

@@ -108,11 +108,12 @@ the deployed URL after merge.
 
 | Control | Where | Why |
 | - | - | - |
-| 16 KB JSON body cap → 413 PAYLOAD_TOO_LARGE | `lib/api/parse-body.ts` (`MAX_BODY_BYTES`). Checks declared `Content-Length` up front, then re-checks `req.text().length` so a missing/lying header can't bypass. | Largest legitimate body is the activity step at <1 KB; the cap is 16× headroom. Without it a client could stream MB-scale bodies through Zod. |
+| 16 KB JSON body cap → 413 PAYLOAD_TOO_LARGE | `lib/api/parse-body.ts` (`MAX_BODY_BYTES`). Two-stage: declared `Content-Length` over the cap is rejected up front (no read); otherwise the body is read and its **UTF-8 byte** length (`Buffer.byteLength(text, "utf8")`, not char count) is re-checked post-read. This is a post-read cap — a body with a missing/lying `Content-Length` is buffered before rejection, which is fine for the demo's sub-KB bodies. | Largest legitimate body is the activity step at <1 KB; the cap is 16× headroom. The early `Content-Length` path avoids buffering an honestly-declared oversized upload. |
 | 512-char `user_agent` truncation at ingest | `lib/session.ts:truncateUserAgent`, applied inside `createSession`. | The column is `text` with no DB-side length limit. UA is diagnostic-only — 512 chars is well past any real UA. |
 
-Tests: `tests/lib/api/parse-body.test.ts` (4 new cases),
-`tests/lib/session-ua.test.ts`.
+Tests: `tests/lib/api/parse-body.test.ts` (5 new cases, incl. a
+multibyte body whose char count is under the cap but whose UTF-8 byte
+length is over it), `tests/lib/session-ua.test.ts`.
 
 ## 3.3 Trusted host model (`APP_ORIGIN`)
 
@@ -121,8 +122,10 @@ for server-side RSC fetches of our own `/api/v1`. Two modes:
 
 1. **Pinned (recommended in prod).** `APP_ORIGIN=https://...`
    environment variable is set. The origin is taken verbatim and
-   parsed through `new URL(...).origin`; a malformed value throws on
-   first internal fetch (fail-fast).
+   parsed through `new URL(...)`; a malformed value, or one whose
+   scheme is not `http:`/`https:` (e.g. `javascript:` / `data:`,
+   which parse but yield an `"null"` origin), throws on first
+   internal fetch (fail-fast) rather than silently falling back.
 2. **Forwarded-header fallback.** `APP_ORIGIN` is unset. We then
    use `x-forwarded-host` / `x-forwarded-proto`, then `host`, then
    `VERCEL_URL`, then `localhost:3000`. This preserves cURL/local-dev
@@ -133,7 +136,8 @@ Owner sets `APP_ORIGIN=https://project-u415a.vercel.app` on Vercel
 after this branch merges; `.env.example` documents the toggle.
 
 Tests: `tests/lib/internal-fetch.test.ts` (pinned wins, URL.origin
-strips path, fallback active when unset, malformed value rejected).
+strips path, fallback active when unset, malformed value rejected,
+non-http(s) scheme rejected).
 
 ## 3.4 Dependency hygiene
 

@@ -9,10 +9,15 @@ import { ERROR_CODES, jsonError } from "./errors";
  * <1 KB; 16 KB is a comfortable 16× headroom. Rejects with
  * `413 PAYLOAD_TOO_LARGE` (docs/04-api-design.md §Error model).
  *
- * Implemented as a belt-and-suspenders pair:
- *   1. Trust the declared `Content-Length` header up front (cheap).
- *   2. Read the body as text and re-check the actual byte length,
- *      so a missing/lying `Content-Length` doesn't bypass the cap.
+ * Two-stage guard:
+ *   1. Declared `Content-Length` over the cap → reject up front (cheap,
+ *      avoids reading the body at all).
+ *   2. Otherwise read the body and re-check its actual UTF-8 byte
+ *      length post-read. This is a post-read cap, not a streaming one:
+ *      a body with a missing/lying `Content-Length` is fully buffered
+ *      by `req.text()` before we reject it. For this demo's tiny bodies
+ *      that is fine; the early `Content-Length` path is what avoids
+ *      buffering an honestly-declared oversized upload.
  */
 export const MAX_BODY_BYTES = 16 * 1024;
 
@@ -72,12 +77,10 @@ export async function parseJsonBody<T>(
       }),
     };
   }
-  // `req.text()` decodes to a JS string; byte length is bounded by the
-  // utf-8 encoding of that string. Comparing string length is a cheap
-  // upper-bound check that's slightly conservative (rejecting some
-  // ascii-only bodies between 16 KB chars and 16 KB bytes is fine here;
-  // none of our schemas come close to either limit).
-  if (text.length > MAX_BODY_BYTES) {
+  // Re-check the *byte* length, not `text.length`: a JS string's
+  // `.length` counts UTF-16 code units, so a multibyte body could stay
+  // under MAX_BODY_BYTES characters while exceeding the byte cap.
+  if (Buffer.byteLength(text, "utf8") > MAX_BODY_BYTES) {
     return { ok: false, res: tooLarge(requestId) };
   }
 

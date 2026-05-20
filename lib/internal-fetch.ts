@@ -29,7 +29,17 @@ function resolveAppOrigin(): string | null {
   }
   // Throws on malformed URL — surfaces as 500 on first RSC fetch
   // rather than silently falling back to forwarded headers.
-  appOriginCache = new URL(raw).origin;
+  const url = new URL(raw);
+  // Reject schemes that parse but can't address an HTTP origin
+  // (e.g. `javascript:`, `data:` → `url.origin === "null"`). Without
+  // this, a misconfigured APP_ORIGIN would produce obscure fetch
+  // failures instead of an obvious fail-fast.
+  if (url.protocol !== "http:" && url.protocol !== "https:") {
+    throw new Error(
+      `APP_ORIGIN must be an http(s) origin; got protocol "${url.protocol}"`,
+    );
+  }
+  appOriginCache = url.origin;
   return appOriginCache;
 }
 
