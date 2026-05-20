@@ -44,6 +44,8 @@ export const RATE_LIMITS = {
   steps: { limit: 80, windowSeconds: 60 },
   submit: { limit: 15, windowSeconds: 60 },
   pay: { limit: 15, windowSeconds: 60 },
+  checkout: { limit: 20, windowSeconds: 60 },
+  webhook: { limit: 30, windowSeconds: 60 },
 } satisfies Record<string, RateLimitRule>;
 
 export type RateLimitRoute = keyof typeof RATE_LIMITS;

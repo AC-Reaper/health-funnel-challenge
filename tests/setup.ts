@@ -9,4 +9,6 @@ process.env.DIRECT_URL ??=
   "postgresql://placeholder:placeholder@localhost:5432/placeholder";
 process.env.SESSION_COOKIE_SECRET ??=
   "test-secret-test-secret-test-secret-test-secret";
+process.env.PAYMENT_WEBHOOK_SECRET ??=
+  "test-webhook-secret-test-webhook-secret-test-webhook";
 // NODE_ENV is read-only under @types/node; vitest already sets it to "test".
