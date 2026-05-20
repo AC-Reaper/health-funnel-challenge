@@ -10,6 +10,7 @@ import {
   noSession,
 } from "@/lib/api/errors";
 import { parseJsonBody } from "@/lib/api/parse-body";
+import { checkRateLimit } from "@/lib/api/rate-limit";
 import { getRequestId } from "@/lib/api/request-id";
 import { checkSameOrigin } from "@/lib/api/same-origin";
 import { stepIsFilled, type ProjectedAssessment } from "@/lib/assessment";
@@ -42,6 +43,10 @@ export async function POST(req: Request) {
 
   try {
     const sid = verifyCookie((await cookies()).get(COOKIE_NAME)?.value);
+
+    const rl = await checkRateLimit(req, "submit", requestId, sid);
+    if (!rl.ok) return rl.res;
+
     if (!sid) return noSession(requestId);
 
     const session = await findSessionById(sid);

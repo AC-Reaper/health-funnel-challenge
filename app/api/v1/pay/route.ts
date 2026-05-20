@@ -10,6 +10,7 @@ import {
 } from "@/lib/api/errors";
 import { withNoStore } from "@/lib/api/cache-control";
 import { IDEMPOTENCY_KEY_SCHEMA } from "@/lib/api/idempotency-key";
+import { checkRateLimit } from "@/lib/api/rate-limit";
 import { parseJsonBody } from "@/lib/api/parse-body";
 import { getRequestId } from "@/lib/api/request-id";
 import { checkSameOrigin } from "@/lib/api/same-origin";
@@ -32,6 +33,10 @@ export async function POST(req: Request) {
 
   try {
     const sid = verifyCookie((await cookies()).get(COOKIE_NAME)?.value);
+
+    const rl = await checkRateLimit(req, "pay", requestId, sid);
+    if (!rl.ok) return rl.res;
+
     if (!sid) return noSession(requestId);
 
     const session = await findSessionById(sid);
