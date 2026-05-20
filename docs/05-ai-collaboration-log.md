@@ -49,6 +49,11 @@ limiter (serverless invalidates it) and downgraded UUIDv7 to
 ids. Both reversals saved scope at a phase where over-engineering had
 no payoff.
 
+(Post-MVP follow-up, ADR-016: rate limiting was later added on Owner's
+request — but as a **Postgres-backed** best-effort limiter, precisely
+the serverless-correct shape the Phase-1 reasoning pointed to, not the
+in-memory one that was rejected here.)
+
 ### Phase 1 — Design
 
 The biggest reversal of the project. Architecture v1 included a

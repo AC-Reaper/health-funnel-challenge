@@ -316,3 +316,53 @@ Consequences:
 - ADR-001's body stays immutable; doc/README/memory references read
   "Next.js 15 App Router (initially scaffolded on 14, upgraded during
   production-hardening)".
+
+## ADR-016: Rate limiting — Postgres-backed best-effort, on hot write routes
+
+Status: Accepted (2026-05-21, `feature/rate-limit`)
+
+Reverses the earlier "rate limiting is out of MVP scope" non-goal
+(docs/02 §9, docs/08 §5). Owner asked for a layer of rate limiting on
+the high-value write paths within the demo window.
+
+Context:
+The flood vector is the unauthenticated/cheap write paths —
+`POST /api/v1/sessions` (unbounded anonymous session rows), the step
+PATCH, `/submit`, and `/pay`. The earlier decision deferred limiting
+because in-memory limiters are unreliable on Vercel (per-instance,
+reset on cold start) and an external store (Upstash/Vercel KV) was a
+dependency we didn't want to add late.
+
+Decision:
+Implement a best-effort, Postgres-backed fixed-window limiter
+(`lib/api/rate-limit.ts`) on `sessions`, `steps`, `submit`, and `pay`.
+- Backend: a `rate_limit` table (key, count, window_start, expires_at)
+  reusing the existing Supabase/Prisma stack — **no new external
+  dependency**. Shared across instances, so it is correct on
+  serverless where in-memory is not.
+- Key: SHA-256 of client IP (left-most `x-forwarded-for`) + session id
+  (when present) + User-Agent, per route per fixed window. No raw
+  IP/UA is persisted.
+- Fail-open: a store error allows the request, so a limiter outage
+  never breaks the demo loop.
+- 429 `RATE_LIMITED` + `Retry-After` on breach; expired rows pruned
+  opportunistically (~2% of calls).
+
+Reason:
+- Postgres reuses what we already operate; Upstash/KV would add an
+  external service, env, and failure path for marginal benefit at demo
+  scale.
+- Fail-open + best-effort fixed-window matches the "throttle abuse,
+  never block the evaluator" goal. The remaining unbounded-anonymous
+  vector (a brand-new identity each call) is what rate limiting itself
+  now bounds per IP/UA window; a true global guarantee would still
+  want a dedicated store, noted as the higher-throughput prod path.
+
+Consequences:
+- Schema grows to 5 domain tables + 1 operational table (`rate_limit`);
+  third migration `20260521000000_add_rate_limit`. Owner applies it via
+  `npm run db:deploy` at/before deploy.
+- Extra DB upsert on each limited request; acceptable on pgBouncer
+  transaction pooling at demo scale.
+- `429 RATE_LIMITED` flips from "reserved" to enforced in docs/04.
+- Limits (per 60s/identity): sessions 20, steps 80, submit 15, pay 15.

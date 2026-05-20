@@ -160,6 +160,33 @@ moderate XSS-in-CSS-Stringify advisory drops out of the prod tree.
 
 Reproducer: `npm audit --omit=dev` → "found 0 vulnerabilities".
 
+## 3.5 Rate limiting (ADR-016)
+
+Best-effort, **Postgres-backed** fixed-window limiter on the hot write
+routes — `POST /api/v1/sessions`, step `PATCH`, `POST /submit`,
+`POST /pay` (`lib/api/rate-limit.ts`). Read routes and `/healthz` are
+not limited.
+
+| Property | Choice | Why |
+| - | - | - |
+| Store | `rate_limit` table (Supabase/Prisma) | Shared across Vercel's many short-lived instances; an in-memory counter would be per-instance and reset on cold start. No new external dependency. |
+| Key | SHA-256 of client IP (left-most `x-forwarded-for`) + session id (when present) + User-Agent, per route per window | Composite identity; **no raw IP/UA is persisted** (only the hash). |
+| Algorithm | Fixed window, `count` via Prisma upsert+increment | Simple + atomic-enough; a tiny under-count race under heavy concurrency is acceptable for a throttle. |
+| On store error | **Fail-open** (allow) | A limiter outage must never break the demo loop. |
+| Breach response | `429 RATE_LIMITED` + `Retry-After` | `ERROR_CODES.RATE_LIMITED` (previously reserved). |
+| Limits (per 60s/identity) | sessions 20, steps 80, submit 15, pay 15 | Generous for the 6-step browser flow + edits + README cURL walkthrough; tight enough to throttle scripted abuse. |
+| Cleanup | opportunistic prune of expired rows (~2% of calls) | Bounds table growth without a cron; `expires_at` is indexed for a scheduled sweep if desired. |
+
+Honest scope: this bounds a single IP/UA/cookie identity per window. A
+hard global guarantee under a large botnet would still want a dedicated
+store (Upstash/Vercel KV) — noted as the higher-throughput prod path,
+not needed at demo scale.
+
+Tests: `tests/lib/api/rate-limit.test.ts` (pure window/key/identity
+helpers + an in-memory `RateLimitStore`: under-limit pass, over-limit
+429 + `Retry-After`, fail-open on store error, window rollover reset,
+per-identity isolation).
+
 ## 4. Day-5 / post-MVP additions changelog
 
 - **ADR-014** — server-side cookie TTL via `iat` + 30d expiry + 60s
@@ -178,6 +205,9 @@ Reproducer: `npm audit --omit=dev` → "found 0 vulnerabilities".
 - **Security-polish branch** — `poweredByHeader: false` (drops
   `X-Powered-By`), documented mock-payment trust boundary (§5) and
   the post-MVP strict-CSP plan (§3.1).
+- **Rate-limit branch (ADR-016)** — Postgres-backed best-effort
+  fixed-window limiter on `/sessions`, step PATCH, `/submit`, `/pay`
+  (§3.5). Reverses the earlier "rate limiting deferred" non-goal.
 
 ## 5. Intentionally out of scope
 
@@ -206,14 +236,12 @@ later, they are documented elsewhere as known follow-ups.
   documented post-MVP swap that reuses the existing idempotency-key +
   DB-unique-constraint shape (the `/pay` handler would become the
   webhook handler).
-- **Rate limiting**. Vercel serverless invalidates in-memory limiters
-  (different instances per request). The production path is
-  Upstash / Vercel KV — throttle `/api/v1/sessions` (anonymous
-  session creation) and `/api/v1/pay` (the only high-cost write)
-  first; the rest of the surface is cookie-scoped and self-limiting.
-  Deferred from the production-hardening branch on purpose: wiring
-  a real KV at the eleventh hour risks destabilising `/pay`, which
-  has more value than catching the unlikely brute-force scenario.
+- **Rate limiting** — **now implemented** (ADR-016, §3.5): a
+  Postgres-backed best-effort fixed-window limiter on `/sessions`, step
+  PATCH, `/submit`, and `/pay`. Still out of scope: a dedicated
+  distributed store (Upstash / Vercel KV) for hard global guarantees
+  under large-scale abuse — the higher-throughput prod path, not needed
+  at demo scale.
 - **WAF / captcha / bot detection**. Not graded. Adding them would
   obscure the hand-rolled controls the brief actually evaluates.
 - **User-data export / deletion endpoints (GDPR-style)**. No PII is

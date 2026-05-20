@@ -45,24 +45,26 @@ See `PROJECT_BRIEF.md` for the scoring criteria and MVP boundary, and
 | Payment | Fully mocked `POST /api/v1/pay` with `Idempotency-Key` | Brief asks for mock; replay-safe by DB unique constraint. In production, entitlement would be granted only from a server-verified provider webhook, not a browser-callable endpoint — see `docs/08-security-hardening.md` §5. |
 | Hosting | Vercel (app) + Supabase (DB) | Free tier; public HTTPS URL out of the box; no VPS required. |
 
-Full decision history lives in `memory/decisions.md` (ADR-001…015).
+Full decision history lives in `memory/decisions.md` (ADR-001…016).
 
 ## Status
 
 Day 1–5 features shipped + delivery-compliance + production-hardening
 passes. Full funnel loop runs end-to-end against Supabase: anonymous
 session → 6-step browser quiz → submit → calculator → gated teaser →
-mock `/pay` → full result. 224 unit tests green; live cookie-jar smoke
+mock `/pay` → full result. 240 unit tests green; live cookie-jar smoke
 covers happy + sad paths for every endpoint; the Codex review log
-(`docs/06-review-log.md`) is current through `review-012`, all
+(`docs/06-review-log.md`) is current through `review-013`, all
 Resolved; `npm audit --omit=dev` clean (Next.js 15.5.18 +
 pinned `postcss` override). Production-hardening pass adds baseline
 security response headers (XCTO / XFO / Referrer-Policy /
 Permissions-Policy / CSP frame-ancestors), `Cache-Control: private,
 no-store` on every personalised + error response, a 16 KB body-size
-cap (`413 PAYLOAD_TOO_LARGE`), 512-char `User-Agent` truncation, and
-an optional `APP_ORIGIN` allowlist for `internalUrl()` —
-`docs/08-security-hardening.md` §3.1–§3.4 has the falsifiable
+cap (`413 PAYLOAD_TOO_LARGE`), 512-char `User-Agent` truncation, an
+optional `APP_ORIGIN` allowlist for `internalUrl()`, and a
+Postgres-backed best-effort rate limiter on the hot write routes
+(`429 RATE_LIMITED` + `Retry-After`, ADR-016) —
+`docs/08-security-hardening.md` §3.1–§3.5 has the falsifiable
 table.
 
 ## To be added (in implementation order)
@@ -124,7 +126,7 @@ npm run dev   # http://localhost:3000
 | `npm run build` | `prisma generate` + `next build` (used on Vercel) |
 | `npm run start` | Production server (after `npm run build`) |
 | `npm run typecheck` | `tsc --noEmit` |
-| `npm test` | Vitest, 224 unit tests |
+| `npm test` | Vitest, 240 unit tests |
 | `npm run db:deploy` | `prisma migrate deploy` against `DIRECT_URL` |
 
 Node 20 LTS is pinned via `.nvmrc`.
@@ -333,7 +335,7 @@ sessionId，复制 README §Paid test session 的 cURL 段落即可
   (Supabase) + Vercel.
 • 匿名 session、HMAC-signed httpOnly cookie、server-side TTL。
 • 7 个 /api/v1 路由，全部 Zod 校验。
-• 224 个 vitest 单元；Codex 评审记录截至 review-012 全部 Resolved；`npm audit --omit=dev` 干净。
+• 240 个 vitest 单元；Codex 评审记录截至 review-013 全部 Resolved；`npm audit --omit=dev` 干净。
 • 评审记录: docs/06-review-log.md。
 
 期待反馈。

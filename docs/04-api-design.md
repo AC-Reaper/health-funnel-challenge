@@ -2,7 +2,7 @@
 
 > Status: **Current** — Claude 2026-05-18, last updated 2026-05-19
 > against `feature/day5-hardening` after review-004-final I002. Mirrors
-> `docs/02-architecture.md` v2 + ADR-001…014. The seven routes below
+> `docs/02-architecture.md` v2 + ADR-001…016. The seven routes below
 > are all implemented, smoked, and reviewed; review-001/002/003/006/007
 > are Resolved. The auth section reflects ADR-014's server-side cookie
 > TTL.
@@ -114,7 +114,7 @@ All errors share one envelope, regardless of status code:
 | 413 | `PAYLOAD_TOO_LARGE` | Request body exceeded the `MAX_BODY_BYTES` (16 KB) cap. Largest legitimate body in the funnel is well under 1 KB; see `lib/api/parse-body.ts` and `docs/08-security-hardening.md` §3.2. |
 | 422 | `VALIDATION_ERROR` | Zod validation failed on body or step. |
 | 422 | `INCOMPLETE_ASSESSMENT` | `/submit` called while required answers are missing. |
-| 429 | `RATE_LIMITED` | Reserved; not enforced in the MVP. |
+| 429 | `RATE_LIMITED` | Best-effort fixed-window rate limit exceeded on a write route (`POST /sessions`, step `PATCH`, `/submit`, `/pay`). Carries a `Retry-After` header. See `docs/08-security-hardening.md` §3.5 and ADR-016. |
 | 500 | `INTERNAL_ERROR` | Unhandled server failure. Logged with `requestId`. |
 
 ---

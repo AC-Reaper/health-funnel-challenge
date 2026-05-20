@@ -11,7 +11,8 @@
 
 ## 1. Overview
 
-Five tables on Postgres / Supabase:
+Five **domain** tables on Postgres / Supabase, plus one **operational**
+table (`rate_limit`):
 
 - `session` — anonymous funnel attempt + entitlement.
 - `assessment` — 1:1 with session; the user's quiz answers.
@@ -19,6 +20,11 @@ Five tables on Postgres / Supabase:
 - `payment` — N:1 with session; audit + idempotency for the mock `/pay`.
 - `step_event` — N:1 with session; append-only audit of every successful
   PATCH on `/sessions/me/steps/:stepKey` (ADR-009, T-502, shipped Day 5).
+- `rate_limit` — **operational**, not a domain entity and not linked to
+  `session`. Backs the best-effort fixed-window rate limiter (ADR-016):
+  one row per `(route, identity-hash, time-window)`, `count` incremented
+  per request, `expires_at` indexed for pruning. Identity is a SHA-256 of
+  IP + session id + User-Agent, so no raw IP/UA is stored.
 
 Out of this schema, by accepted decisions:
 
