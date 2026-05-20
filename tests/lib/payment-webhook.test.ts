@@ -80,6 +80,26 @@ describe("WEBHOOK_PAYLOAD_SCHEMA", () => {
       ).success,
     ).toBe(false);
   });
+
+  it("reuses the printable-ASCII hardening for idempotencyKey (review-009)", () => {
+    // The webhook is the only grant path — it must not accept the input
+    // class the old /pay route deliberately closed.
+    for (const badKey of ["bad\nkey", "bad\u0000key", "non\u00e9ascii"]) {
+      expect(
+        WEBHOOK_PAYLOAD_SCHEMA.safeParse({
+          ...JSON.parse(goodPayloadJson()),
+          idempotencyKey: badKey,
+        }).success,
+      ).toBe(false);
+    }
+    // A clean printable-ASCII key still passes.
+    expect(
+      WEBHOOK_PAYLOAD_SCHEMA.safeParse({
+        ...JSON.parse(goodPayloadJson()),
+        idempotencyKey: "ok-key-123",
+      }).success,
+    ).toBe(true);
+  });
 });
 
 describe("validateWebhookPayload", () => {

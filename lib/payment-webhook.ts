@@ -4,6 +4,7 @@ import { createHmac, timingSafeEqual } from "node:crypto";
 
 import { z } from "zod";
 
+import { IDEMPOTENCY_KEY_SCHEMA } from "./api/idempotency-key";
 import { AMOUNT_CENTS, PAYMENT_CURRENCY } from "./payment";
 
 /**
@@ -61,7 +62,12 @@ export const WEBHOOK_PAYLOAD_SCHEMA = z
   .object({
     eventType: z.literal("checkout.completed"),
     sessionId: z.string().uuid(),
-    idempotencyKey: z.string().min(1).max(128),
+    // Reuse the printable-ASCII hardening (review-009, ADR-006). The
+    // webhook is now the only grant path, so the same input class that
+    // was closed for the old /pay route must stay closed here — control
+    // chars / newlines / non-ASCII keys are rejected before they can
+    // reach `payment.idempotency_key`.
+    idempotencyKey: IDEMPOTENCY_KEY_SCHEMA,
     amountCents: z.number().int(),
     currency: z.string(),
     status: z.literal("succeeded"),

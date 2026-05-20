@@ -2,6 +2,7 @@ import { randomUUID } from "node:crypto";
 
 import { NextResponse } from "next/server";
 import { cookies } from "next/headers";
+import { z } from "zod";
 
 import { withNoStore } from "@/lib/api/cache-control";
 import {
@@ -10,6 +11,7 @@ import {
   jsonError,
   noSession,
 } from "@/lib/api/errors";
+import { parseJsonBody } from "@/lib/api/parse-body";
 import { checkRateLimit } from "@/lib/api/rate-limit";
 import { getRequestId } from "@/lib/api/request-id";
 import { checkSameOrigin } from "@/lib/api/same-origin";
@@ -17,6 +19,13 @@ import { AMOUNT_CENTS, PAYMENT_CURRENCY } from "@/lib/payment";
 import { COOKIE_NAME, findSessionById, verifyCookie } from "@/lib/session";
 
 export const dynamic = "force-dynamic";
+
+/**
+ * Body is `{}`. `.strict()` so a malformed body / wrong Content-Type /
+ * unknown field is rejected up front (ADR-005 — Zod owns every boundary),
+ * consistent with `POST /api/v1/sessions` and `/submit`.
+ */
+const CheckoutBody = z.object({}).strict();
 
 /**
  * Create a (mock) checkout for the current session. Browser-facing:
@@ -36,6 +45,9 @@ export async function POST(req: Request) {
 
     const rl = await checkRateLimit(req, "checkout", requestId, sid);
     if (!rl.ok) return rl.res;
+
+    const parsed = await parseJsonBody(req, CheckoutBody, requestId);
+    if (!parsed.ok) return parsed.res;
 
     if (!sid) return noSession(requestId);
 

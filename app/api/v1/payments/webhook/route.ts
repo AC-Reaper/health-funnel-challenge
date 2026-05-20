@@ -12,6 +12,7 @@ import {
   validateWebhookPayload,
   verifyWebhookSignature,
 } from "@/lib/payment-webhook";
+import { findSessionById } from "@/lib/session";
 
 export const dynamic = "force-dynamic";
 
@@ -94,6 +95,34 @@ export async function POST(req: Request) {
           status: 422,
           code: ERROR_CODES.VALIDATION_ERROR,
           message: `Webhook payload rejected: ${check.reason}.`,
+          requestId,
+        }),
+      );
+    }
+
+    // Provider-facing contract: a signature-valid event for an unknown
+    // or not-yet-submitted session is a permanent bad event, not a
+    // server fault. Surface 404 / 409 (not 500) so a real provider would
+    // not retry it. `processPayment` re-locks and stays the source of
+    // truth; an already-paid session passes through as an idempotent
+    // no-op.
+    const session = await findSessionById(parsed.data.sessionId);
+    if (!session) {
+      return withNoStore(
+        jsonError({
+          status: 404,
+          code: ERROR_CODES.NOT_FOUND,
+          message: "Unknown session for this payment event.",
+          requestId,
+        }),
+      );
+    }
+    if (session.status !== "submitted") {
+      return withNoStore(
+        jsonError({
+          status: 409,
+          code: ERROR_CODES.NOT_SUBMITTED,
+          message: "Session has not been submitted; cannot grant entitlement.",
           requestId,
         }),
       );
