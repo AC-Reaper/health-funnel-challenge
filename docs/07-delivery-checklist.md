@@ -16,15 +16,16 @@
 - [x] `04-api-design.md` matches the seven shipped endpoints + ADR-014
       cookie TTL
 - [x] `05-ai-collaboration-log.md` has substantive per-phase entries
-- [x] `06-review-log.md` is current through
-      `review-010-delivery-compliance` (reviews 000…010 all
-      `Resolved` or `Resolved-in-design`/`Closed-informed`)
-
-Out of scope for this delivery (skipped intentionally, not forgotten):
-- `00-product-research.md` BetterMe observations write-up — not graded,
-  not blocking the demo loop.
-- `01-requirements.md` R-001…R-NNN list — `PROJECT_BRIEF.md` §3-§6
-  serves the same role and is the artefact the evaluator reads.
+- [x] `06-review-log.md` is current through the latest review
+      (reviews 000…013 all `Resolved` or
+      `Resolved-in-design`/`Closed-informed`)
+- [x] `00-product-research.md` filled with the BetterMe Pilates funnel
+      walkthrough (steps, persisted data, pre/post-paywall surface,
+      and our deliberate divergences)
+- [x] `01-requirements.md` filled with R-001…R-018 functional +
+      R-101…R-112 non-functional requirements mapped to sources and
+      acceptance tests (`PROJECT_BRIEF.md` §3-§6 remains the canonical
+      DoD; this restates it against stable R-NNN ids)
 
 ## Engineering
 
