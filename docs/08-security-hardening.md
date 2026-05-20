@@ -93,6 +93,17 @@ Two header layers run on every request:
    | `Permissions-Policy` | `camera=(), microphone=(), geolocation=(), payment=()` | Disables powerful APIs we don't use |
    | `Content-Security-Policy` | `frame-ancestors 'none'; object-src 'none'; base-uri 'self'; form-action 'self'` | Defence-in-depth on top of XFO. Intentionally conservative — no `script-src`/`style-src` guesses that would break Next's inline runtime |
 
+   `next.config.mjs` also sets `poweredByHeader: false`, so no
+   response (page or `/api/v1/*`) advertises `X-Powered-By: Next.js`.
+
+   **CSP is a conservative baseline by design.** A stricter policy
+   with `default-src` / `script-src` / `connect-src` / `img-src` /
+   `style-src` is a post-MVP task: it must be introduced in
+   `Content-Security-Policy-Report-Only` mode first (or with nonce
+   plumbing through the App Router) and validated with a full browser
+   smoke, because Next's App Router can break under a naive strict CSP
+   (inline bootstrap script + injected styles).
+
 2. **Per-route `Cache-Control: private, no-store, max-age=0`** — set
    via `lib/api/cache-control.ts:withNoStore` on every `/api/v1`
    success response except `/healthz`, and unconditionally inside
@@ -164,6 +175,9 @@ Reproducer: `npm audit --omit=dev` → "found 0 vulnerabilities".
   CSP), `Cache-Control: private, no-store` on personalised + error
   responses, 16 KB body-size cap with 413 PAYLOAD_TOO_LARGE, 512-
   char UA truncation, `APP_ORIGIN` allowlist for `internalUrl()`.
+- **Security-polish branch** — `poweredByHeader: false` (drops
+  `X-Powered-By`), documented mock-payment trust boundary (§5) and
+  the post-MVP strict-CSP plan (§3.1).
 
 ## 5. Intentionally out of scope
 
@@ -179,6 +193,19 @@ later, they are documented elsewhere as known follow-ups.
   idempotency-key + DB-unique + single-transaction shape so the
   scored "支付回调闭环" criterion lands on the design, not on a real
   Stripe integration (ADR-006).
+
+  **Mock-payment trust boundary.** In this demo, `POST /api/v1/pay`
+  intentionally grants entitlement directly after a submitted session
+  so the evaluator can verify the paid-result loop from the browser /
+  cURL. In production, entitlement would be granted **only** from a
+  payment-provider webhook (e.g. Stripe Checkout `checkout.session.
+  completed`) verified server-side via the webhook signature — never
+  from a browser-callable endpoint. This is intentional for the
+  interview demo and is **not** a current challenge blocker, because
+  the brief explicitly asks for mock payment; the real flow is a
+  documented post-MVP swap that reuses the existing idempotency-key +
+  DB-unique-constraint shape (the `/pay` handler would become the
+  webhook handler).
 - **Rate limiting**. Vercel serverless invalidates in-memory limiters
   (different instances per request). The production path is
   Upstash / Vercel KV — throttle `/api/v1/sessions` (anonymous

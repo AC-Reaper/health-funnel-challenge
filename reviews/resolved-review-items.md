@@ -885,3 +885,11 @@ Source: `reviews/review-011-production-hardening.md` (0 Blocking, 2 Important, 2
 - **N002 — Next build multiple-lockfile warning** → `next.config.mjs` sets `outputFileTracingRoot` to the package dir (`dirname(fileURLToPath(import.meta.url))`); the warning is gone from `npm run build`.
 
 Codex re-review verification at `06817a5`: `tsc --noEmit`, `npm test` (224 green), `next build` (no lockfile warning), `npm audit --omit=dev` (0/0), `npx prisma validate`, `git diff --check`, and `npm ls next postcss` all clean. Status: Resolved 2026-05-20 on `feature/production-hardening`.
+
+## review-012 (security-polish) findings
+
+Source: `reviews/review-012-security-polish.md` (0 Blocking, 1 Important, 0 Nice-to-have).
+
+- **I001 — README headline reported pre-review-011 test/review state** → `README.md` updated in three places: status block (`222` → `224` tests; "eleven Codex reviews (000…010) Resolved" → "the Codex review log (`docs/06-review-log.md`) is current through `review-012`, all Resolved"), the commands table `npm test` row (222 → 224), and the Chinese submission summary (`222 个 vitest … + 10 轮 Codex` → `224 个 vitest … Codex 评审记录截至 review-012 全部 Resolved`). Per Codex's churn-reduction suggestion, the review state is now phrased as "current through `review-NNN`" + a pointer to the review log instead of a hard-coded round count repeated across the file.
+
+Verification after fix: `tsc --noEmit`, `npm test` (224 green), `next build`, `npm audit --omit=dev` (0/0), `npx prisma validate`, `git diff --check` all clean.
