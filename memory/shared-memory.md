@@ -86,27 +86,27 @@ payment.
 - Browser pages → `app/page.tsx`, `app/funnel/**`, `app/pay/{page,PayButton}.tsx`, `app/results/page.tsx`
 - Step audit → `step_event` model + `20260519000000_add_step_event`
   migration (ADR-009 accepted on Day 5)
-- Test suite → `tests/**` (vitest, 224 tests on `feature/security-polish`)
+- Test suite → `tests/**` (vitest, 228 tests on `feature/landing-cta`)
 - ADR log → `memory/decisions.md` (ADR-001…015 Accepted)
 - Open questions → `memory/open-questions.md` (no open blocker)
-- Latest reviews → `reviews/review-012-security-polish.md` (Open at `ba15dac`, 0 Blocking / 1 Important / 0 Nice-to-have); `reviews/review-011-production-hardening.md` (Resolved at `06817a5`); `reviews/review-010-delivery-compliance.md` (Resolved at `a14b90f`); earlier reviews are resolved for their branches.
+- Latest reviews → `reviews/review-013-landing-cta.md` (Resolved at `f3ea061`); `reviews/review-012-security-polish.md` (Resolved); `reviews/review-011-production-hardening.md` (Resolved at `06817a5`); earlier reviews are resolved for their branches.
 
 ## Current Branch
 
-`feature/security-polish` — low-risk tester follow-up branch on top
-of merged production-hardening (`main` at `e8bfd14`). It adds one
-config-level header hardening and two documentation clarifications:
+`feature/landing-cta` — state-aware landing CTA branch on top of
+merged security-polish (`main` at `36d78e8`). It fixes the misleading
+"Start the quiz" label for returning sessions:
 
-- `next.config.mjs` sets `poweredByHeader: false`, so pages and
-  `/api/v1/*` responses no longer advertise `X-Powered-By: Next.js`.
-- `docs/08-security-hardening.md` §5 documents the mock-payment trust
-  boundary: browser-callable `/api/v1/pay` intentionally grants
-  entitlement for the interview demo; production would use a
-  provider webhook verified server-side.
-- `docs/08-security-hardening.md` §3.1 documents strict CSP as
-  post-MVP because naive `script-src`/nonce changes can break the
-  Next App Router without Report-Only/nonce plumbing and full browser
-  smoke.
+- `app/page.tsx` is now a dynamic server component that reads the
+  signed session cookie and renders the CTA that matches actual
+  routing behaviour.
+- `lib/landing-cta.ts:resolveLandingCta` is the pure decision seam:
+  no session / empty draft → Start, draft with progress → Continue,
+  submitted → View results.
+- `tests/lib/landing-cta.test.ts` covers the four state branches.
+- `memory/open-questions.md` Q-007 records the explicit restart/start
+  over option as deferred; the visitor-table model is the ADR-016
+  candidate if revived.
 
 Inherited from production-hardening:
 
@@ -128,14 +128,13 @@ Inherited from production-hardening:
   Owner sets `APP_ORIGIN=https://project-u415a.vercel.app` on Vercel
   after merge.
 
-Codex reviewed `ba15dac`: security-polish implementation is accepted
-and local header smoke confirms `X-Powered-By` is gone while baseline
-headers remain. Verification passes (`tsc --noEmit`, `npm test` 224,
-`next build`, `npm audit --omit=dev` 0/0, `npx prisma validate`,
-`git diff --check`). `reviews/review-012-security-polish.md` is Open
-with one Important finding: README still reports 222 tests and reviews
-000…010, so its headline/status needs to catch up to review-011 and
-the 224-test suite before merge.
+Codex reviewed `f3ea061`: `reviews/review-013-landing-cta.md` is
+Resolved with no findings. Verification passes (`tsc --noEmit`,
+`npm test` 228, `next build`, `npx prisma validate`,
+`git diff --check`). Local cookie-jar smoke confirms landing CTA
+states: no cookie → Start, empty draft → Start, draft progress →
+Continue, submitted → View results. The branch is mergeable from the
+landing-CTA review perspective.
 
 ## Code Management
 

@@ -99,6 +99,13 @@ POST /api/v1/pay                 ──► requires Idempotency-Key header
 GET /api/v1/results/me           ──► full
 ```
 
+The landing CTA is **state-aware** (`app/page.tsx` +
+`lib/landing-cta.ts:resolveLandingCta`): a returning visitor sees
+"Continue the quiz" (draft with progress → `/funnel`) or "View your
+results" (submitted → `/results`) instead of a misleading "Start the
+quiz" that would silently redirect a submitted session to `/results`.
+An explicit "start over" / restart is deferred (open-questions Q-007).
+
 Edge / error paths the design must cover:
 
 - Refresh mid-step → cookie persists → `GET /sessions/me` restores progress.
