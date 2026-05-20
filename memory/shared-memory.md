@@ -132,10 +132,11 @@ Important / 2 Nice-to-have; all four are now fixed on-branch:
 - N002 — `next.config.mjs:outputFileTracingRoot` silences the
   multiple-lockfile build warning.
 
-Verification passes: `tsc --noEmit`, `npm test` (224), `next build`
-(no lockfile warning), `npm audit --omit=dev` (0/0), `npx prisma
-validate`, `git diff --check`. The branch is mergeable from the
-review-011 perspective.
+Codex re-reviewed `06817a5`: verification passes (`tsc --noEmit`,
+`npm test` 224, `next build` with no lockfile warning,
+`npm audit --omit=dev` 0/0, `npx prisma validate`, `git diff --check`,
+`npm ls next postcss`). `reviews/review-011-production-hardening.md`
+is Resolved. The branch is mergeable from the review-011 perspective.
 
 ## Code Management
 

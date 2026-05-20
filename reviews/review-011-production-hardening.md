@@ -2,13 +2,13 @@
 
 ## Status
 
-Resolved — reviewed `feature/production-hardening` at `2dcbee6`; all
-four findings (I001, I002, N001, N002) fixed on the same branch.
-See `reviews/resolved-review-items.md` → "review-011" for the
-per-item resolution + verification. 224 tests green; build no longer
-warns about lockfiles.
+Resolved — reviewed `feature/production-hardening` at `2dcbee6` and
+re-reviewed fixes at `06817a5`. All four findings (I001, I002, N001,
+N002) are verified fixed. 224 tests green; build no longer warns about
+lockfiles.
 
 Original review (Open) reviewed `feature/production-hardening` at `2dcbee6`.
+Re-review head: `06817a5`.
 
 PR URL: https://github.com/AC-Reaper/health-funnel-challenge/pull/new/feature/production-hardening
 
@@ -43,6 +43,8 @@ Scope reviewed:
 
 ## Verification
 
+Initial review at `2dcbee6`:
+
 - `npm run typecheck` — pass.
 - `npm test` — pass, 222 tests.
 - `npm run build` — pass. Residual Next warning about multiple
@@ -56,6 +58,17 @@ Scope reviewed:
     `cache-control: private, no-store, max-age=0`.
   - `GET /api/v1/sessions/me` no-cookie returns the expected
     `NO_SESSION` envelope.
+
+Re-review at `06817a5`:
+
+- `npm run typecheck` — pass.
+- `npm test` — pass, 224 tests.
+- `npm run build` — pass; the previous multiple-lockfile warning is gone.
+- `npm run db:validate` — pass.
+- `git diff --check` — pass.
+- `npm audit --omit=dev` — pass, found 0 vulnerabilities.
+- `npm ls next postcss` — `next@15.5.18` and `postcss@8.5.15`
+  deduped across Next/Tailwind/Vite.
 
 ## Findings
 
@@ -91,6 +104,10 @@ None.
   `413 PAYLOAD_TOO_LARGE`. Adjust the comment/docs to say this is a
   post-read cap, with the declared `Content-Length` check serving as the
   cheap early rejection path.
+- Resolution: Fixed at `06817a5`. `lib/api/parse-body.ts` now uses
+  `Buffer.byteLength(text, "utf8")`; the comment and `docs/08` now
+  explicitly call this a post-read cap; a multibyte euro-sign regression
+  proves byte accuracy. Status: Resolved.
 
 #### I002 — Next 15 upgrade is not recorded as an ADR-level decision
 
@@ -116,6 +133,10 @@ None.
   `docs/02`, README wording, and memory references to say "Next.js 15
   App Router (initially scaffolded on 14, upgraded during
   production-hardening)."
+- Resolution: Fixed at `06817a5`. ADR-015 records the Next 15.5.18
+  patch baseline and amends ADR-001 version only; `docs/02`, README,
+  and memory references now use ADR-001…015 and note the scaffolded-on-14
+  to upgraded-on-15 path. Status: Resolved.
 
 ### Nice-to-have
 
@@ -135,6 +156,9 @@ None.
   === "http:"` and `url.origin !== "null"` before caching. Add one
   unit test for `APP_ORIGIN="javascript:alert(1)"` or `data:text/plain,x`
   rejecting on first use.
+- Resolution: Fixed at `06817a5`. `internalUrl()` now throws for
+  non-http(s) `APP_ORIGIN` schemes, with a regression test for
+  `javascript:alert(1)` and docs/08 alignment. Status: Resolved.
 
 #### N002 — Next build warning about multiple lockfiles is still noisy
 
@@ -151,4 +175,6 @@ None.
   `outputFileTracingRoot` in `next.config.mjs` to the repo root so the
   warning disappears. Keep this low-priority; it should not block merge
   if the two Important items are fixed.
-
+- Resolution: Fixed at `06817a5`. `next.config.mjs` pins
+  `outputFileTracingRoot` to this package directory; `npm run build`
+  is warning-free in re-review. Status: Resolved.
