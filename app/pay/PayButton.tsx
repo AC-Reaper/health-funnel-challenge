@@ -14,13 +14,12 @@ export function PayButton({ priceLabel }: PayButtonProps) {
     setStatus("pending");
     setError(null);
     try {
-      const idempotencyKey = crypto.randomUUID();
-      const res = await fetch("/api/v1/pay", {
+      // The browser only *starts* a checkout — it cannot grant
+      // entitlement. Granting happens at the signature-verified
+      // webhook, reached via the mock-provider page (ADR-017).
+      const res = await fetch("/api/v1/payments/checkout", {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "Idempotency-Key": idempotencyKey,
-        },
+        headers: { "Content-Type": "application/json" },
         body: "{}",
         credentials: "same-origin",
       });
@@ -29,13 +28,17 @@ export function PayButton({ priceLabel }: PayButtonProps) {
           error?: { code?: string; message?: string };
         };
         throw new Error(
-          body.error?.message ?? `Payment failed (${res.status})`,
+          body.error?.message ?? `Checkout failed (${res.status})`,
         );
       }
-      window.location.href = "/results";
+      const body = (await res.json()) as { status?: string };
+      // Already paid → straight to the result; otherwise to the
+      // mock provider's hosted-checkout page to confirm.
+      window.location.href =
+        body.status === "completed" ? "/results" : "/checkout";
     } catch (err) {
       setStatus("error");
-      setError(err instanceof Error ? err.message : "Payment failed.");
+      setError(err instanceof Error ? err.message : "Checkout failed.");
     }
   }
 
