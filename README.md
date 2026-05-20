@@ -42,7 +42,7 @@ See `PROJECT_BRIEF.md` for the scoring criteria and MVP boundary, and
 | Database | PostgreSQL (Supabase Free) | Brief lists this combo; managed, free, no ops. |
 | ORM / migrations | Prisma | First-class TS types; checked-in migrations. |
 | Identity | Anonymous session, signed httpOnly cookie | Brief permits session/UUID; no real-auth scope creep. |
-| Payment | Fully mocked `POST /api/v1/pay` with `Idempotency-Key` | Brief asks for mock; replay-safe by DB unique constraint. |
+| Payment | Fully mocked `POST /api/v1/pay` with `Idempotency-Key` | Brief asks for mock; replay-safe by DB unique constraint. In production, entitlement would be granted only from a server-verified provider webhook, not a browser-callable endpoint — see `docs/08-security-hardening.md` §5. |
 | Hosting | Vercel (app) + Supabase (DB) | Free tier; public HTTPS URL out of the box; no VPS required. |
 
 Full decision history lives in `memory/decisions.md` (ADR-001…015).

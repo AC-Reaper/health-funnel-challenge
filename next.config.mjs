@@ -25,6 +25,9 @@ const SECURITY_HEADERS = [
 ];
 
 const nextConfig = {
+  // Don't advertise the framework on every response. Removes the
+  // `X-Powered-By: Next.js` header from pages and /api/v1/* alike.
+  poweredByHeader: false,
   // Pin the file-tracing root to this package so Next 15 doesn't warn
   // about (and mis-infer) a parent-directory lockfile as the workspace
   // root. The repo is the self-contained tracing root.
