@@ -18,8 +18,8 @@ type ResultsResponse = TeaserResultDTO | FullResultDTO;
 async function fetchResults(): Promise<
   { ok: true; data: ResultsResponse } | { ok: false; status: number; code?: string }
 > {
-  const res = await fetch(internalUrl("/api/v1/results/me"), {
-    headers: { cookie: forwardedCookieHeader() },
+  const res = await fetch(await internalUrl("/api/v1/results/me"), {
+    headers: { cookie: await forwardedCookieHeader() },
     cache: "no-store",
   });
   if (!res.ok) {
@@ -32,7 +32,7 @@ async function fetchResults(): Promise<
 }
 
 export default async function ResultsPage() {
-  const sid = verifyCookie(cookies().get(COOKIE_NAME)?.value);
+  const sid = verifyCookie((await cookies()).get(COOKIE_NAME)?.value);
   if (!sid) redirect("/");
 
   const response = await fetchResults();

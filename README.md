@@ -16,6 +16,7 @@ UI fidelity.
 | **DB design + ER diagram** | [`docs/03-database-design.md`](docs/03-database-design.md) |
 | **AI collaboration log** | [`docs/05-ai-collaboration-log.md`](docs/05-ai-collaboration-log.md) |
 | **Security review** | [`docs/08-security-hardening.md`](docs/08-security-hardening.md) |
+| **Prod audit** | `npm audit --omit=dev` → 0 vulnerabilities (Next.js 15.5.18 + pinned `postcss` override). |
 
 Want a working paid session against the live URL in ~30 seconds? Jump
 to [§Paid test session](#paid-test-session) below.
@@ -35,7 +36,7 @@ See `PROJECT_BRIEF.md` for the scoring criteria and MVP boundary, and
 
 | Layer | Choice | Why (short version) |
 | - | - | - |
-| Frontend | Next.js 14 (App Router) + TypeScript | Same process serves UI + API; fastest path to a public demo URL. |
+| Frontend | Next.js 15 (App Router) + TypeScript | Same process serves UI + API; fastest path to a public demo URL. |
 | Backend | Next.js route handlers + TypeScript | One repo, one deploy. |
 | Validation | Zod at every API boundary | Single source of truth for runtime checks and TS types. |
 | Database | PostgreSQL (Supabase Free) | Brief lists this combo; managed, free, no ops. |
@@ -44,21 +45,30 @@ See `PROJECT_BRIEF.md` for the scoring criteria and MVP boundary, and
 | Payment | Fully mocked `POST /api/v1/pay` with `Idempotency-Key` | Brief asks for mock; replay-safe by DB unique constraint. |
 | Hosting | Vercel (app) + Supabase (DB) | Free tier; public HTTPS URL out of the box; no VPS required. |
 
-Full decision history lives in `memory/decisions.md` (ADR-001…014).
+Full decision history lives in `memory/decisions.md` (ADR-001…015).
 
 ## Status
 
-Day 1–5 features shipped + delivery-compliance hardening. Full funnel
-loop runs end-to-end against Supabase: anonymous session → 6-step
-browser quiz → submit → calculator → gated teaser → mock `/pay` → full
-result. 210 unit tests green; live cookie-jar smoke covers happy + sad
-paths for every endpoint; eleven Codex reviews (000…010) Resolved.
+Day 1–5 features shipped + delivery-compliance + production-hardening
+passes. Full funnel loop runs end-to-end against Supabase: anonymous
+session → 6-step browser quiz → submit → calculator → gated teaser →
+mock `/pay` → full result. 222 unit tests green; live cookie-jar smoke
+covers happy + sad paths for every endpoint; eleven Codex reviews
+(000…010) Resolved; `npm audit --omit=dev` clean (Next.js 15.5.18 +
+pinned `postcss` override). Production-hardening pass adds baseline
+security response headers (XCTO / XFO / Referrer-Policy /
+Permissions-Policy / CSP frame-ancestors), `Cache-Control: private,
+no-store` on every personalised + error response, a 16 KB body-size
+cap (`413 PAYLOAD_TOO_LARGE`), 512-char `User-Agent` truncation, and
+an optional `APP_ORIGIN` allowlist for `internalUrl()` —
+`docs/08-security-hardening.md` §3.1–§3.4 has the falsifiable
+table.
 
 ## To be added (in implementation order)
 
 | Day | What lands here |
 | - | - |
-| Day 1 | ✅ `package.json` + Prisma schema + first migration (`feature/db-schema`, merged). ✅ Next.js 14 App Router skeleton + `lib/session.ts` + first 3 endpoints (`feature/session-progress-api`, merged after live Supabase smoke). |
+| Day 1 | ✅ `package.json` + Prisma schema + first migration (`feature/db-schema`, merged). ✅ Next.js App Router skeleton (scaffolded on 14; upgraded to 15.5.18 during production-hardening, ADR-015) + `lib/session.ts` + first 3 endpoints (`feature/session-progress-api`, merged after live Supabase smoke). |
 | Day 2 | ✅ Zod step schemas + `PATCH /api/v1/sessions/me/steps/:stepKey` with first-incomplete-step + weight-coherence rules + vitest with 108 unit tests (`feature/funnel-persistence-api`, merged). |
 | Day 3 | ✅ Pure health calculator (`lib/health/calculator.ts`) + `POST /api/v1/sessions/me/submit` + two-serializer `GET /api/v1/results/me` (leak-tested) + mock `POST /api/v1/pay` with `Idempotency-Key` + minimal `/pay` and `/results` browser pages (`feature/assessment-result-api`, merged after review-006 closeout). |
 | Day 4 | ✅ Polished funnel UI (`/funnel` server-bootstrapped stepper, Tailwind), `/pay` UX gate on `GET /results/me` (closes review-006 N003), `/results` restyle, Vercel + Supabase deploy, cookie-jar cURL walkthrough below (`feature/frontend-funnel`). |
@@ -113,7 +123,7 @@ npm run dev   # http://localhost:3000
 | `npm run build` | `prisma generate` + `next build` (used on Vercel) |
 | `npm run start` | Production server (after `npm run build`) |
 | `npm run typecheck` | `tsc --noEmit` |
-| `npm test` | Vitest, 210 unit tests |
+| `npm test` | Vitest, 222 unit tests |
 | `npm run db:deploy` | `prisma migrate deploy` against `DIRECT_URL` |
 
 Node 20 LTS is pinned via `.nvmrc`.
@@ -318,11 +328,11 @@ sessionId，复制 README §Paid test session 的 cURL 段落即可
 （脚本会输出 sessionId / paymentId / entitlementStatus）。
 
 技术摘要：
-• Next.js 14 App Router + TypeScript + Zod + Prisma + Postgres
+• Next.js 15 App Router + TypeScript + Zod + Prisma + Postgres
   (Supabase) + Vercel.
 • 匿名 session、HMAC-signed httpOnly cookie、server-side TTL。
 • 7 个 /api/v1 路由，全部 Zod 校验。
-• 210 个 vitest 单元 + 10 轮 Codex 评审全部 Resolved。
+• 222 个 vitest 单元 + 10 轮 Codex 评审全部 Resolved；`npm audit --omit=dev` 干净。
 • 评审记录: docs/06-review-log.md。
 
 期待反馈。

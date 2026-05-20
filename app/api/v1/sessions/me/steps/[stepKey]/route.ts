@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { cookies } from "next/headers";
 
+import { withNoStore } from "@/lib/api/cache-control";
 import {
   ERROR_CODES,
   internalError,
@@ -33,15 +34,16 @@ export const dynamic = "force-dynamic";
 
 export async function PATCH(
   req: Request,
-  { params }: { params: { stepKey: string } },
+  { params }: { params: Promise<{ stepKey: string }> },
 ) {
+  const resolvedParams = await params;
   const requestId = getRequestId(req);
 
   const originCheck = checkSameOrigin(req, requestId);
   if (!originCheck.ok) return originCheck.res;
 
   try {
-    const sid = verifyCookie(cookies().get(COOKIE_NAME)?.value);
+    const sid = verifyCookie((await cookies()).get(COOKIE_NAME)?.value);
     if (!sid) return noSession(requestId);
 
     const session = await findSessionById(sid);
@@ -56,7 +58,7 @@ export async function PATCH(
       });
     }
 
-    const { stepKey } = params;
+    const { stepKey } = resolvedParams;
     if (!isStepKey(stepKey)) {
       return jsonError({
         status: 400,
@@ -142,15 +144,16 @@ export async function PATCH(
         patch as Parameters<typeof persistStepPatch>[2],
       );
 
-    return NextResponse.json(
-      serializeSession(freshSession, freshAssessment),
-      { headers: { "x-request-id": requestId } },
+    return withNoStore(
+      NextResponse.json(serializeSession(freshSession, freshAssessment), {
+        headers: { "x-request-id": requestId },
+      }),
     );
   } catch (err) {
     console.error(
       JSON.stringify({
         level: "error",
-        msg: `PATCH /api/v1/sessions/me/steps/${params.stepKey} failed`,
+        msg: `PATCH /api/v1/sessions/me/steps/${resolvedParams.stepKey} failed`,
         requestId,
         err: err instanceof Error ? err.message : String(err),
       }),

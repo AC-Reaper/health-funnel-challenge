@@ -96,6 +96,11 @@ All errors share one envelope, regardless of status code:
 - `requestId` is echoed from / generated for every request for log
   correlation.
 - HTTP status follows HTTP semantics, never `200` with an error body.
+- Every `/api/v1` response except `GET /healthz` carries
+  `Cache-Control: private, no-store, max-age=0` on both success and
+  error paths (`lib/api/cache-control.ts:withNoStore`). Errors leak
+  state too: 401 vs 409 vs 413 vs 422 reveals where in the lifecycle
+  a session is. See `docs/08-security-hardening.md` §3.1.
 
 | HTTP | `code` | When |
 | - | - | - |
@@ -106,6 +111,7 @@ All errors share one envelope, regardless of status code:
 | 409 | `STEP_OUT_OF_ORDER` | Step save would skip a required earlier step. |
 | 409 | `NOT_SUBMITTED` | Result or payment requested before `/submit`. Used by both `GET /api/v1/results/me` and `POST /api/v1/pay`. |
 | 409 | `ALREADY_SUBMITTED` | `/submit` called again with different inputs (we still return 200 with the existing result for identical replays — see `/submit`). |
+| 413 | `PAYLOAD_TOO_LARGE` | Request body exceeded the `MAX_BODY_BYTES` (16 KB) cap. Largest legitimate body in the funnel is well under 1 KB; see `lib/api/parse-body.ts` and `docs/08-security-hardening.md` §3.2. |
 | 422 | `VALIDATION_ERROR` | Zod validation failed on body or step. |
 | 422 | `INCOMPLETE_ASSESSMENT` | `/submit` called while required answers are missing. |
 | 429 | `RATE_LIMITED` | Reserved; not enforced in the MVP. |

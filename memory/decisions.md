@@ -274,3 +274,45 @@ Consequences:
 - UI/paywall/result copy starts in English.
 - Future Chinese copy is non-blocking.
 - Calculator fixtures are written against the accepted Mifflin-St Jeor rules.
+
+## ADR-015: Framework patch baseline — Next.js 15.5.18
+
+Status: Accepted (2026-05-20, `feature/production-hardening`)
+
+Amends ADR-001 (version only): the App Router + TypeScript +
+single-repo decision stands. This ADR records the framework-version
+bump made for production audit hygiene.
+
+Context:
+The app was scaffolded on Next.js 14 (ADR-001). During the
+production-hardening pass, `npm audit --omit=dev` flagged 14
+advisories on `next@^14.2.15` (1 high + 1 moderate via nested
+`postcss`), including GHSA-26hh-7cqf-hhc6 (segment-prefetch
+middleware bypass). The project treats ADRs as authoritative, so a
+major framework bump made for security needs a recorded decision
+rather than a silent dependency change.
+
+Decision:
+Upgrade to `next@15.5.18` (the lowest 15.x patch that clears
+GHSA-26hh-7cqf-hhc6) and pin the nested `postcss` to `^8.5.14` via a
+top-level `overrides` block. Stay on React 18. Adopt Next 15's async
+`cookies()` / `headers()` / dynamic-route `params` APIs at every
+callsite.
+
+Reason:
+- One major (14→15) clears the prod audit while staying React 18 /
+  Node 20 compatible; jumping to `next@16` would be two majors with a
+  larger break surface for no extra security benefit at this point.
+- `overrides.postcss` clears the last moderate without waiting for
+  Next to re-vendor its nested copy.
+
+Consequences:
+- `npm audit --omit=dev` is 0/0.
+- `cookies()`/`headers()`/`params` are awaited across 6 routes + 3
+  pages + `lib/internal-fetch.ts`; `internalUrl()` /
+  `forwardedCookieHeader()` became async.
+- `next.config.mjs` sets `outputFileTracingRoot` to the repo so Next
+  15 doesn't mis-infer a parent-directory lockfile (review-011 N002).
+- ADR-001's body stays immutable; doc/README/memory references read
+  "Next.js 15 App Router (initially scaffolded on 14, upgraded during
+  production-hardening)".

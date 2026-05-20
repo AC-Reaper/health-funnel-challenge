@@ -78,6 +78,77 @@ a committed regression. No "verified in design only" rows.
 | `Origin: null` / malformed | `tests/lib/api/same-origin.test.ts` | rejected |
 | SQL injection via body | All DB writes go through Prisma's parameterized query-builder. The **only** `$queryRaw` callsite in app / lib / prisma / tests is `lib/payment.ts:183` — the per-session lock `SELECT id FROM "session" WHERE id = ${sessionId}::uuid FOR UPDATE` — and it uses Prisma's tagged-template form (so `${sessionId}` is bound, not concatenated). The `sessionId` value comes from `verifyCookie`, not the request body. | `rg -n '\$queryRaw\|\$executeRaw' app lib prisma tests --glob '!node_modules' --glob '!package-lock.json'` returns exactly that one site; the §2 row walks through it. |
 
+## 3.1 Response headers + caching (production-hardening branch)
+
+Two header layers run on every request:
+
+1. **Global baseline (`next.config.mjs:headers()`)** — applied to
+   `/:path*`. Same five headers for every page and API route.
+
+   | Header | Value | Why |
+   | - | - | - |
+   | `X-Content-Type-Options` | `nosniff` | Stops UA MIME-sniffing |
+   | `X-Frame-Options` | `DENY` | No iframe embedding (clickjacking) |
+   | `Referrer-Policy` | `no-referrer` | Prevents `sessionId` leakage via Referer (the cookie carries auth, but the URL still mentions the resource) |
+   | `Permissions-Policy` | `camera=(), microphone=(), geolocation=(), payment=()` | Disables powerful APIs we don't use |
+   | `Content-Security-Policy` | `frame-ancestors 'none'; object-src 'none'; base-uri 'self'; form-action 'self'` | Defence-in-depth on top of XFO. Intentionally conservative — no `script-src`/`style-src` guesses that would break Next's inline runtime |
+
+2. **Per-route `Cache-Control: private, no-store, max-age=0`** — set
+   via `lib/api/cache-control.ts:withNoStore` on every `/api/v1`
+   success response except `/healthz`, and unconditionally inside
+   `jsonError()` so 401 / 409 / 413 / 422 / 500 also carry it. This
+   stops a misconfigured CDN/proxy from serving a cookie-scoped
+   payload (teaser vs full result, payment state, step answers) to
+   the wrong session.
+
+Tests: `tests/lib/api/cache-control.test.ts`. Smoke: `curl -sI` on
+the deployed URL after merge.
+
+## 3.2 Body-size cap + User-Agent truncation
+
+| Control | Where | Why |
+| - | - | - |
+| 16 KB JSON body cap → 413 PAYLOAD_TOO_LARGE | `lib/api/parse-body.ts` (`MAX_BODY_BYTES`). Two-stage: declared `Content-Length` over the cap is rejected up front (no read); otherwise the body is read and its **UTF-8 byte** length (`Buffer.byteLength(text, "utf8")`, not char count) is re-checked post-read. This is a post-read cap — a body with a missing/lying `Content-Length` is buffered before rejection, which is fine for the demo's sub-KB bodies. | Largest legitimate body is the activity step at <1 KB; the cap is 16× headroom. The early `Content-Length` path avoids buffering an honestly-declared oversized upload. |
+| 512-char `user_agent` truncation at ingest | `lib/session.ts:truncateUserAgent`, applied inside `createSession`. | The column is `text` with no DB-side length limit. UA is diagnostic-only — 512 chars is well past any real UA. |
+
+Tests: `tests/lib/api/parse-body.test.ts` (5 new cases, incl. a
+multibyte body whose char count is under the cap but whose UTF-8 byte
+length is over it), `tests/lib/session-ua.test.ts`.
+
+## 3.3 Trusted host model (`APP_ORIGIN`)
+
+`internalUrl()` in `lib/internal-fetch.ts` derives the absolute URL
+for server-side RSC fetches of our own `/api/v1`. Two modes:
+
+1. **Pinned (recommended in prod).** `APP_ORIGIN=https://...`
+   environment variable is set. The origin is taken verbatim and
+   parsed through `new URL(...)`; a malformed value, or one whose
+   scheme is not `http:`/`https:` (e.g. `javascript:` / `data:`,
+   which parse but yield an `"null"` origin), throws on first
+   internal fetch (fail-fast) rather than silently falling back.
+2. **Forwarded-header fallback.** `APP_ORIGIN` is unset. We then
+   use `x-forwarded-host` / `x-forwarded-proto`, then `host`, then
+   `VERCEL_URL`, then `localhost:3000`. This preserves cURL/local-dev
+   ergonomics and the existing behaviour any deploy that hasn't set
+   the env relies on.
+
+Owner sets `APP_ORIGIN=https://project-u415a.vercel.app` on Vercel
+after this branch merges; `.env.example` documents the toggle.
+
+Tests: `tests/lib/internal-fetch.test.ts` (pinned wins, URL.origin
+strips path, fallback active when unset, malformed value rejected,
+non-http(s) scheme rejected).
+
+## 3.4 Dependency hygiene
+
+`npm audit --omit=dev` is **0/0** as of the production-hardening
+branch. `next` is on `15.5.18` (patches GHSA-26hh-7cqf-hhc6 segment-
+prefetch middleware bypass); the nested `postcss` carried by Next
+is pinned to `^8.5.14` via a top-level `overrides` block so the
+moderate XSS-in-CSS-Stringify advisory drops out of the prod tree.
+
+Reproducer: `npm audit --omit=dev` → "found 0 vulnerabilities".
+
 ## 4. Day-5 / post-MVP additions changelog
 
 - **ADR-014** — server-side cookie TTL via `iat` + 30d expiry + 60s
@@ -88,6 +159,11 @@ a committed regression. No "verified in design only" rows.
 - **Same-origin guard** — `lib/api/same-origin.ts`, this branch.
 - **`Idempotency-Key` printable-ASCII restriction** —
   `lib/api/idempotency-key.ts`, this branch.
+- **Production-hardening branch** — Next.js 14→15.5.18 (clears prod
+  audit), baseline response headers (XCTO/XFO/Referrer/Permissions/
+  CSP), `Cache-Control: private, no-store` on personalised + error
+  responses, 16 KB body-size cap with 413 PAYLOAD_TOO_LARGE, 512-
+  char UA truncation, `APP_ORIGIN` allowlist for `internalUrl()`.
 
 ## 5. Intentionally out of scope
 
@@ -105,8 +181,12 @@ later, they are documented elsewhere as known follow-ups.
   Stripe integration (ADR-006).
 - **Rate limiting**. Vercel serverless invalidates in-memory limiters
   (different instances per request). The production path is
-  documented as Upstash / Vercel KV in `docs/02-architecture.md` §9
-  but not implemented for the demo window.
+  Upstash / Vercel KV — throttle `/api/v1/sessions` (anonymous
+  session creation) and `/api/v1/pay` (the only high-cost write)
+  first; the rest of the surface is cookie-scoped and self-limiting.
+  Deferred from the production-hardening branch on purpose: wiring
+  a real KV at the eleventh hour risks destabilising `/pay`, which
+  has more value than catching the unlikely brute-force scenario.
 - **WAF / captcha / bot detection**. Not graded. Adding them would
   obscure the hand-rolled controls the brief actually evaluates.
 - **User-data export / deletion endpoints (GDPR-style)**. No PII is

@@ -4,7 +4,7 @@
 
 Health quiz funnel full-stack challenge for Ruiqi Technology (睿迄科技).
 5-day delivery. MVP is merged to `main`; post-MVP security hardening is
-review-resolved on `feature/security-hardening` at `bcb4f2a`. ADR-001…014
+review-resolved on `feature/security-hardening` at `bcb4f2a`. ADR-001…015
 are Accepted.
 
 ## Final Goal
@@ -17,7 +17,8 @@ payment.
 
 ## Confirmed Tech Stack
 
-- Next.js 14 App Router (UI + API route handlers)
+- Next.js 15 App Router (UI + API route handlers; initially
+  scaffolded on Next 14, upgraded during production-hardening)
 - TypeScript (strict)
 - Prisma + PostgreSQL on Supabase (Free tier)
 - Zod at every API boundary
@@ -85,22 +86,57 @@ payment.
 - Browser pages → `app/page.tsx`, `app/funnel/**`, `app/pay/{page,PayButton}.tsx`, `app/results/page.tsx`
 - Step audit → `step_event` model + `20260519000000_add_step_event`
   migration (ADR-009 accepted on Day 5)
-- Test suite → `tests/**` (vitest, 210 tests on `feature/delivery-compliance-hardening`)
-- ADR log → `memory/decisions.md` (ADR-001…014 Accepted)
+- Test suite → `tests/**` (vitest, 222 tests on `feature/production-hardening`)
+- ADR log → `memory/decisions.md` (ADR-001…015 Accepted)
 - Open questions → `memory/open-questions.md` (no open blocker)
-- Latest reviews → `reviews/review-010-delivery-compliance.md` (Resolved at `a14b90f`); `reviews/review-009-security-hardening.md` (Resolved at `bcb4f2a`); `reviews/review-008-frontend-polish.md` (Resolved at `c974fbb`); `reviews/review-004-final.md` (Resolved at `f2b37f8`); `reviews/review-007-browser-smoke.md` (Resolved); `reviews/review-006-day3.md` (Resolved); `reviews/review-002-api.md` and `reviews/review-003-db.md` are resolved for earlier branches.
+- Latest reviews → `reviews/review-011-production-hardening.md` (Resolved — I001/I002/N001/N002 all fixed on-branch after the `2dcbee6` review); `reviews/review-010-delivery-compliance.md` (Resolved at `a14b90f`); `reviews/review-009-security-hardening.md` (Resolved at `bcb4f2a`); `reviews/review-008-frontend-polish.md` (Resolved at `c974fbb`); `reviews/review-004-final.md` (Resolved at `f2b37f8`); earlier reviews are resolved for their branches.
 
 ## Current Branch
 
-`feature/delivery-compliance-hardening` — final delivery-compliance
-branch. Ships the `/pay` submitted gate, README submission block + paid
-test cURL + email template, logical User/Subscription mapping in
-`docs/03`, `/pay` 409 docs, a full-result trust footer, and final
-checklist updates. Codex re-reviewed `a14b90f` on 2026-05-20:
-I001 and N001 are resolved; `typecheck`, 210 tests, build,
-`db:validate`, and diff-check pass. Initial review's live production
-paid-session cURL smoke remains valid. The branch is mergeable from
-the delivery-compliance review perspective.
+`feature/production-hardening` — post-delivery production-hardening
+branch (8 commits on top of the delivery-compliance merge at
+`cdd075d`). Bumps Next 14.2.15 → 15.5.18 (clears prod `npm audit` to
+0/0, including GHSA-26hh-7cqf-hhc6 and the nested-postcss XSS
+advisory via a top-level `overrides`), then layers five hardening
+changes:
+
+- Baseline response headers via `next.config.mjs:headers()` —
+  XCTO/XFO/Referrer-Policy/Permissions-Policy + a conservative
+  `frame-ancestors 'none'; object-src 'none'; base-uri 'self';
+  form-action 'self'` CSP that intentionally avoids `script-src`
+  guesses.
+- `Cache-Control: private, no-store, max-age=0` on every
+  personalised + error response (`lib/api/cache-control.ts` +
+  `jsonError()`); `/healthz` stays cacheable.
+- 16 KB body-size cap with `413 PAYLOAD_TOO_LARGE` enforced in
+  `lib/api/parse-body.ts` (declared `Content-Length` checked up
+  front + actual body length re-checked).
+- 512-char User-Agent truncation at `createSession` ingest
+  (`lib/session.ts:truncateUserAgent`).
+- `APP_ORIGIN` env allowlist for `lib/internal-fetch.ts:internalUrl()`,
+  with a forwarded-host fallback so cURL/local-dev keep working.
+  Owner sets `APP_ORIGIN=https://project-u415a.vercel.app` on Vercel
+  after merge.
+
+Docs synced: `docs/08` §3.1–§3.4 + §5 rate-limit deferral; `docs/04`
+413 row + Cache-Control bullet; `docs/02` §5 cross-ref; README status
+block bumped to Next 15 + 222 tests + audit clean.
+
+Tests 210 → 224. Codex review-011 at `2dcbee6` had 0 Blocking / 2
+Important / 2 Nice-to-have; all four are now fixed on-branch:
+- I001 — body-size cap re-checks `Buffer.byteLength(text, "utf8")`
+  (byte-accurate, not char count); docs reworded to "post-read cap".
+- I002 — Next 15 upgrade recorded as **ADR-015** (amends ADR-001
+  version only); ADR index/range bumped to ADR-001…015.
+- N001 — `APP_ORIGIN` rejects non-http(s) schemes (fail-fast).
+- N002 — `next.config.mjs:outputFileTracingRoot` silences the
+  multiple-lockfile build warning.
+
+Codex re-reviewed `06817a5`: verification passes (`tsc --noEmit`,
+`npm test` 224, `next build` with no lockfile warning,
+`npm audit --omit=dev` 0/0, `npx prisma validate`, `git diff --check`,
+`npm ls next postcss`). `reviews/review-011-production-hardening.md`
+is Resolved. The branch is mergeable from the review-011 perspective.
 
 ## Code Management
 

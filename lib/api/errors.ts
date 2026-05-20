@@ -1,11 +1,14 @@
 import { NextResponse } from "next/server";
 
+import { NO_STORE } from "./cache-control";
+
 /**
  * Stable machine-readable error codes from docs/04-api-design.md §Error model.
  * Add new codes here and reference them by name from route handlers.
  */
 export const ERROR_CODES = {
   BAD_REQUEST: "BAD_REQUEST",
+  PAYLOAD_TOO_LARGE: "PAYLOAD_TOO_LARGE",
   NO_SESSION: "NO_SESSION",
   FORBIDDEN_ORIGIN: "FORBIDDEN_ORIGIN",
   NOT_FOUND: "NOT_FOUND",
@@ -57,7 +60,7 @@ export function jsonError({
   };
   return NextResponse.json(body, {
     status,
-    headers: { "x-request-id": requestId },
+    headers: { "x-request-id": requestId, "Cache-Control": NO_STORE },
   });
 }
 

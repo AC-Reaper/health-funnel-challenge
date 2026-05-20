@@ -19,11 +19,11 @@ const formatPrice = (cents: number, currency: string) =>
   `${currency === "USD" ? "$" : `${currency} `}${(cents / 100).toFixed(2)}`;
 
 export default async function PayPage() {
-  const sid = verifyCookie(cookies().get(COOKIE_NAME)?.value);
+  const sid = verifyCookie((await cookies()).get(COOKIE_NAME)?.value);
   if (!sid) redirect("/");
 
-  const res = await fetch(internalUrl("/api/v1/results/me"), {
-    headers: { cookie: forwardedCookieHeader() },
+  const res = await fetch(await internalUrl("/api/v1/results/me"), {
+    headers: { cookie: await forwardedCookieHeader() },
     cache: "no-store",
   });
 

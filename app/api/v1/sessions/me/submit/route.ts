@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { cookies } from "next/headers";
 import { z } from "zod";
 
+import { withNoStore } from "@/lib/api/cache-control";
 import {
   ERROR_CODES,
   internalError,
@@ -40,7 +41,7 @@ export async function POST(req: Request) {
   if (!originCheck.ok) return originCheck.res;
 
   try {
-    const sid = verifyCookie(cookies().get(COOKIE_NAME)?.value);
+    const sid = verifyCookie((await cookies()).get(COOKIE_NAME)?.value);
     if (!sid) return noSession(requestId);
 
     const session = await findSessionById(sid);
@@ -156,13 +157,15 @@ function submitEnvelope(
   entitlementStatus: "free" | "paid",
   requestId: string,
 ): NextResponse {
-  return NextResponse.json(
-    {
-      sessionId,
-      submittedAt: submittedAt.toISOString(),
-      resultId,
-      entitlementStatus,
-    },
-    { headers: { "x-request-id": requestId } },
+  return withNoStore(
+    NextResponse.json(
+      {
+        sessionId,
+        submittedAt: submittedAt.toISOString(),
+        resultId,
+        entitlementStatus,
+      },
+      { headers: { "x-request-id": requestId } },
+    ),
   );
 }

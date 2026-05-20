@@ -8,6 +8,7 @@ import {
   jsonError,
   noSession,
 } from "@/lib/api/errors";
+import { withNoStore } from "@/lib/api/cache-control";
 import { IDEMPOTENCY_KEY_SCHEMA } from "@/lib/api/idempotency-key";
 import { parseJsonBody } from "@/lib/api/parse-body";
 import { getRequestId } from "@/lib/api/request-id";
@@ -30,7 +31,7 @@ export async function POST(req: Request) {
   if (!originCheck.ok) return originCheck.res;
 
   try {
-    const sid = verifyCookie(cookies().get(COOKIE_NAME)?.value);
+    const sid = verifyCookie((await cookies()).get(COOKIE_NAME)?.value);
     if (!sid) return noSession(requestId);
 
     const session = await findSessionById(sid);
@@ -66,9 +67,11 @@ export async function POST(req: Request) {
 
     const outcome = await processPayment(sid, keyParsed.data);
 
-    return NextResponse.json(serializePayment(outcome), {
-      headers: { "x-request-id": requestId },
-    });
+    return withNoStore(
+      NextResponse.json(serializePayment(outcome), {
+        headers: { "x-request-id": requestId },
+      }),
+    );
   } catch (err) {
     console.error(
       JSON.stringify({

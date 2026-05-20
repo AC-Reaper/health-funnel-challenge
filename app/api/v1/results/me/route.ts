@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { cookies } from "next/headers";
 
+import { withNoStore } from "@/lib/api/cache-control";
 import {
   ERROR_CODES,
   internalError,
@@ -22,7 +23,7 @@ export async function GET(req: Request) {
   const requestId = getRequestId(req);
 
   try {
-    const sid = verifyCookie(cookies().get(COOKIE_NAME)?.value);
+    const sid = verifyCookie((await cookies()).get(COOKIE_NAME)?.value);
     if (!sid) return noSession(requestId);
 
     const session = await findSessionById(sid);
@@ -55,9 +56,11 @@ export async function GET(req: Request) {
         ? serializeFull(result)
         : serializeTeaser(result);
 
-    return NextResponse.json(body, {
-      headers: { "x-request-id": requestId },
-    });
+    return withNoStore(
+      NextResponse.json(body, {
+        headers: { "x-request-id": requestId },
+      }),
+    );
   } catch (err) {
     console.error(
       JSON.stringify({
