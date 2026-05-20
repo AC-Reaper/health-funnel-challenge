@@ -1,10 +1,11 @@
 import "server-only";
 
-import { createHash } from "node:crypto";
+import { createHmac } from "node:crypto";
 
 import type { NextResponse } from "next/server";
 
 import { db } from "../db";
+import { env } from "../env";
 import { ERROR_CODES, jsonError } from "./errors";
 
 /**
@@ -59,11 +60,17 @@ export function clientIp(req: Request): string {
   return req.headers.get("x-real-ip")?.trim() || "unknown";
 }
 
-/** Salted SHA-256 of IP + session id + User-Agent (no raw PII stored). */
+/**
+ * Keyed (peppered) hash of IP + session id + User-Agent. Uses
+ * HMAC-SHA256 with `SESSION_COOKIE_SECRET` as the pepper — the same
+ * server secret `lib/session.ts` signs cookies with — so the low-entropy
+ * inputs (an IP, a UA string) cannot be brute-forced/correlated from a
+ * leaked `rate_limit` row without the secret. No raw IP/UA is stored.
+ */
 export function identityHash(req: Request, sid: string | null): string {
   const ip = clientIp(req);
   const ua = req.headers.get("user-agent") ?? "";
-  return createHash("sha256")
+  return createHmac("sha256", env.SESSION_COOKIE_SECRET)
     .update(`${ip}|${sid ?? ""}|${ua}`)
     .digest("hex")
     .slice(0, 32);

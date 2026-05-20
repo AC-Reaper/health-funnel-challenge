@@ -340,7 +340,8 @@ Implement a best-effort, Postgres-backed fixed-window limiter
   reusing the existing Supabase/Prisma stack — **no new external
   dependency**. Shared across instances, so it is correct on
   serverless where in-memory is not.
-- Key: SHA-256 of client IP (left-most `x-forwarded-for`) + session id
+- Key: keyed HMAC-SHA256 (peppered with `SESSION_COOKIE_SECRET`) of
+  client IP (left-most `x-forwarded-for`) + session id
   (when present) + User-Agent, per route per fixed window. No raw
   IP/UA is persisted.
 - Fail-open: a store error allows the request, so a limiter outage

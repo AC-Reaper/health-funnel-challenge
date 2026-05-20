@@ -23,8 +23,9 @@ table (`rate_limit`):
 - `rate_limit` — **operational**, not a domain entity and not linked to
   `session`. Backs the best-effort fixed-window rate limiter (ADR-016):
   one row per `(route, identity-hash, time-window)`, `count` incremented
-  per request, `expires_at` indexed for pruning. Identity is a SHA-256 of
-  IP + session id + User-Agent, so no raw IP/UA is stored.
+  per request, `expires_at` indexed for pruning. Identity is a keyed
+  HMAC-SHA256 (peppered with `SESSION_COOKIE_SECRET`) of IP + session id +
+  User-Agent, so no raw IP/UA is stored.
 
 Out of this schema, by accepted decisions:
 

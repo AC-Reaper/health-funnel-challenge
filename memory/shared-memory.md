@@ -89,7 +89,7 @@ payment.
 - Test suite → `tests/**` (vitest, 240 tests on `feature/rate-limit`)
 - ADR log → `memory/decisions.md` (ADR-001…016 Accepted)
 - Open questions → `memory/open-questions.md` (no open blocker)
-- Latest reviews → `reviews/review-013-landing-cta.md` (Resolved at `f3ea061`, merged); `reviews/review-012-security-polish.md` (Resolved); `reviews/review-011-production-hardening.md` (Resolved at `06817a5`); earlier reviews are resolved for their branches. `feature/rate-limit` awaits its review.
+- Latest reviews → `reviews/review-014-rate-limit.md` (Resolved — N001 precision cleanup fixed on-branch after `b2403a1`); `reviews/review-013-landing-cta.md` (Resolved at `f3ea061`, merged); `reviews/review-012-security-polish.md` (Resolved); `reviews/review-011-production-hardening.md` (Resolved at `06817a5`); earlier reviews are resolved for their branches.
 
 ## Current Branch
 
@@ -103,8 +103,9 @@ earlier "rate limiting deferred" non-goal at Owner's request.
   `POST /submit`, `POST /pay`. New `rate_limit` operational table +
   migration `20260521000000_add_rate_limit` (5 domain + 1 operational
   table). Owner applies it via `npm run db:deploy` at/before deploy.
-- Key = SHA-256(IP + session id + UA) per route per 60s window (no raw
-  IP/UA stored). Fail-open on store error. `429 RATE_LIMITED` +
+- Key = keyed HMAC-SHA256 (peppered with `SESSION_COOKIE_SECRET`) of
+  IP + session id + UA per route per 60s window (no raw IP/UA stored).
+  Fail-open on store error. `429 RATE_LIMITED` +
   `Retry-After`. Limits/identity: sessions 20, steps 80, submit 15,
   pay 15. Opportunistic prune (~2%) bounds the table.
 - Pure helpers + a `RateLimitStore` seam → `tests/lib/api/rate-limit.test.ts`
@@ -118,7 +119,12 @@ earlier "rate limiting deferred" non-goal at Owner's request.
 
 Verification: `tsc --noEmit` clean, `npm test` 240 green,
 `next build` clean, `npx prisma validate` clean, `git diff --check`
-clean. Awaiting Codex review.
+clean. Codex review-014: 0 Blocking/Important; the one Nice-to-have
+(N001) is fixed on-branch — `identityHash` is now a real keyed HMAC
+(peppered with `SESSION_COOKIE_SECRET`, was a plain SHA-256 mislabelled
+"salted"), and the `docs/08` `$queryRaw` citation corrected
+`lib/payment.ts:183` → `:200`. `reviews/review-014-rate-limit.md` is
+Resolved. The branch is mergeable from the review-014 perspective.
 
 Prior post-MVP work (all merged to `main`): state-aware landing CTA
 (review-013), security-polish — `poweredByHeader: false` + mock-payment
