@@ -17,7 +17,8 @@ table (`rate_limit`):
 - `session` — anonymous funnel attempt + entitlement.
 - `assessment` — 1:1 with session; the user's quiz answers.
 - `result` — 1:1 with submitted session; immutable computation snapshot.
-- `payment` — N:1 with session; audit + idempotency for the mock `/pay`.
+- `payment` — N:1 with session; audit + idempotency for the mock
+  payment, written only from the signature-verified webhook (ADR-017).
 - `step_event` — N:1 with session; append-only audit of every successful
   PATCH on `/sessions/me/steps/:stepKey` (ADR-009, T-502, shipped Day 5).
 - `rate_limit` — **operational**, not a domain entity and not linked to
@@ -202,9 +203,10 @@ relies on the snapshot being frozen.
 
 Constraints, two layers:
 
-1. `UNIQUE (session_id, idempotency_key)` — makes `POST /api/v1/pay`
-   replay-safe by construction (ADR-006). Same-key replays converge on
-   the same row via `INSERT … ON CONFLICT DO NOTHING`.
+1. `UNIQUE (session_id, idempotency_key)` — makes the payment grant
+   (the signature-verified webhook, ADR-006/017) replay-safe by
+   construction. Same-key replays converge on the same row via
+   `INSERT … ON CONFLICT DO NOTHING`.
 2. `payment_one_success_per_session_idx` — a **partial unique index** on
    `(session_id) WHERE status = 'succeeded'`, defined only in the
    migration SQL because Prisma cannot model partial indexes. This is

@@ -12,8 +12,9 @@ are Accepted.
 Deliver a public demo URL, GitHub repo with README, API docs, DB schema
 diagram, and an AI collaboration retrospective within 5 days. The
 deployed app must walk an anonymous user through the funnel, gate the
-result on a mock `POST /api/v1/pay`, and return the full result after
-payment.
+result on a mock payment whose entitlement is granted only by a
+signature-verified provider webhook (ADR-017), and return the full
+result after payment.
 
 ## Confirmed Tech Stack
 
@@ -29,9 +30,10 @@ payment.
 - Demo copy starts in English.
 - Calculator uses Mifflin-St Jeor BMR × activity factor with the accepted
   calorie deficit/surplus and safety floors.
-- `/api/v1/pay` silently no-ops for already-paid sessions even if a new
-  `Idempotency-Key` is sent; it returns the existing entitlement and does
-  not insert a second `payment` row.
+- The payment grant (`POST /api/v1/payments/webhook`, ADR-017) silently
+  no-ops for already-paid sessions even if a new `idempotencyKey` is
+  sent; it returns the existing entitlement and does not insert a second
+  `payment` row. Browser `POST /api/v1/payments/checkout` cannot grant.
 
 ## Confirmed MVP Flow
 
@@ -47,11 +49,15 @@ payment.
    writes a `result` row.
 7. `GET /api/v1/results/me` returns a teaser for free sessions
    (BMI + category + headline) or full data for paid sessions.
-8. Paywall CTA navigates to `/pay`.
-9. `POST /api/v1/pay` requires an `Idempotency-Key`, writes the first
-   `payment` row, and flips `session.entitlement_status` to `paid` in
-   one DB transaction (ADR-006). Already-paid sessions silently no-op
-   on later pay attempts (ADR-012).
+8. Paywall CTA navigates to `/pay`; "Pay" creates a checkout
+   (`POST /api/v1/payments/checkout`, no grant) and redirects to the
+   `/checkout` mock-provider page.
+9. The mock provider signs a `checkout.completed` event and posts
+   `POST /api/v1/payments/webhook`, the only grant path: it verifies the
+   HMAC signature + amount/currency/status, writes the first `payment`
+   row, and flips `session.entitlement_status` to `paid` in one DB
+   transaction (ADR-006/017). Already-paid sessions silently no-op on
+   later attempts (ADR-012).
 10. Visitor reloads the result page and sees the full payload.
 
 ## Non-goals
@@ -82,14 +88,14 @@ payment.
 - Result repo → `lib/result-repo.ts`
 - Serializers → `lib/serializers/result.ts` (teaser / full DTO types)
 - Payment → `lib/payment.ts` (pure `decidePaymentAction` + transactional `processPayment`)
-- Route handlers → `app/api/v1/{healthz,sessions,sessions/me,sessions/me/steps/[stepKey],sessions/me/submit,results/me,pay}/route.ts`
-- Browser pages → `app/page.tsx`, `app/funnel/**`, `app/pay/{page,PayButton}.tsx`, `app/results/page.tsx`
+- Route handlers → `app/api/v1/{healthz,sessions,sessions/me,sessions/me/steps/[stepKey],sessions/me/submit,results/me,payments/checkout,payments/webhook}/route.ts`
+- Browser pages → `app/page.tsx`, `app/funnel/**`, `app/pay/{page,PayButton}.tsx`, `app/checkout/{page,ConfirmButton,actions}.ts(x)` (mock provider), `app/results/page.tsx`
 - Step audit → `step_event` model + `20260519000000_add_step_event`
   migration (ADR-009 accepted on Day 5)
 - Test suite → `tests/**` (vitest, 250 tests on `feature/payment-webhook`)
 - ADR log → `memory/decisions.md` (ADR-001…017 Accepted)
 - Open questions → `memory/open-questions.md` (no open blocker)
-- Latest reviews → `reviews/review-014-rate-limit.md` (Resolved, merged to `main` @ `ffdab50`); `reviews/review-013-landing-cta.md` (Resolved, merged); `reviews/review-012-security-polish.md` (Resolved, merged); `reviews/review-011-production-hardening.md` (Resolved, merged); earlier reviews are resolved for their branches. `feature/payment-webhook` awaits its review.
+- Latest reviews → `reviews/review-015-payment-webhook.md` (Open at `308f02c`: 0 Blocking, 3 Important, 1 Nice-to-have); `reviews/review-014-rate-limit.md` (Resolved, merged to `main` @ `ffdab50`); `reviews/review-013-landing-cta.md` (Resolved, merged); `reviews/review-012-security-polish.md` (Resolved, merged); earlier reviews are resolved for their branches.
 
 ## Current Branch
 
@@ -124,7 +130,8 @@ clean (/pay gone; payments/checkout + payments/webhook + /checkout
 added), `npx prisma validate` clean, `git diff --check` clean. openssl
 HMAC recipe verified to byte-match the server `signWebhookPayload`.
 New env `PAYMENT_WEBHOOK_SECRET` in local `.env`; Owner sets it on
-Vercel. Awaiting Codex review (gated — touches the grant path).
+Vercel. Codex review-015 is Open: fix checkout body validation, webhook
+idempotency-key validation, and current-doc route drift before merge.
 
 Prior post-MVP work (all merged to `main`): rate limiting (review-014),
 state-aware landing CTA (review-013), security-polish (review-012),

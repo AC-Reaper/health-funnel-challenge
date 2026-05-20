@@ -94,7 +94,11 @@ Consequences:
 
 ## ADR-006: Payment — mocked `/pay` with `Idempotency-Key`
 
-Status: Accepted (2026-05-18)
+Status: Accepted (2026-05-18); grant **route shape superseded in part by
+ADR-017 (2026-05-21)** — entitlement is now granted only by the
+signature-verified `POST /api/v1/payments/webhook`, not a browser
+`POST /api/v1/pay`. The single-transaction + DB-idempotency semantics
+below (`processPayment`) are unchanged and reused.
 
 Context:
 Brief explicitly asks for a mock `/pay` and grades the closed-loop semantics. A toy button that flips client state would lose points; a fake-but-realistic webhook contract scores.
@@ -367,6 +371,8 @@ Consequences:
   transaction pooling at demo scale.
 - `429 RATE_LIMITED` flips from "reserved" to enforced in docs/04.
 - Limits (per 60s/identity): sessions 20, steps 80, submit 15, pay 15.
+  (After ADR-017 the `pay` route was replaced by `checkout` 20 +
+  `webhook` 30; see `lib/api/rate-limit.ts`.)
 
 ## ADR-017: Payment trust boundary — signature-verified webhook grants entitlement
 

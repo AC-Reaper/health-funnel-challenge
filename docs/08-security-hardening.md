@@ -11,7 +11,7 @@
 ## 1. Attack surface
 
 The shipped surface is **seven HTTP endpoints under `/api/v1`** plus
-three browser routes (`/`, `/funnel`, `/pay`, `/results`). All client
+browser routes (`/`, `/funnel`, `/pay`, `/checkout`, `/results`). All client
 input lands at one of the seven API routes, four of which are
 state-changing.
 
@@ -29,7 +29,7 @@ state-changing.
 
 | Control | Where | How verified |
 | - | - | - |
-| Zod `.strict()` on every request body | `lib/validation/steps.ts`, `lib/validation/assessment.ts`, `app/api/v1/sessions/route.ts:25`, `app/api/v1/sessions/me/submit/route.ts:33`, `app/api/v1/pay/route.ts:21` | `tests/lib/validation/steps.test.ts`, `tests/lib/validation/assessment.test.ts`, `tests/lib/api/parse-body.test.ts` |
+| Zod `.strict()` on every request body | `lib/validation/steps.ts`, `lib/validation/assessment.ts`, `app/api/v1/sessions/route.ts`, `app/api/v1/sessions/me/submit/route.ts`, `app/api/v1/payments/checkout/route.ts` (empty `{}` strict body); the webhook body is `WEBHOOK_PAYLOAD_SCHEMA` (`.strict`) in `lib/payment-webhook.ts` | `tests/lib/validation/steps.test.ts`, `tests/lib/validation/assessment.test.ts`, `tests/lib/api/parse-body.test.ts`, `tests/lib/payment-webhook.test.ts` |
 | Per-step bounded enums + numeric ranges | `lib/validation/steps.ts` | `tests/lib/validation/steps.test.ts` |
 | Cross-field coherence (weight × main_goal) | `lib/health/coherence.ts`, `lib/assessment.ts` | `tests/lib/validation/assessment.test.ts`, `tests/lib/assessment.test.ts` |
 | First-incomplete-step rule (ADR-008) | `lib/progress.ts`, `lib/assessment.ts:firstMissingPrereq` | `tests/lib/progress.test.ts`, `tests/lib/assessment.test.ts` |
@@ -38,11 +38,11 @@ state-changing.
 | `HttpOnly; SameSite=Lax; Secure (prod)` on `Set-Cookie` | `lib/session.ts:buildSetCookieHeader` | Live cookie-jar smoke (README §"Demo path"); review-007 production verification |
 | Two-serializer leak invariant | `lib/serializers/result.ts` | `tests/lib/serializers/result.test.ts` (LEAK INVARIANT case asserts every paid-only field name is absent from teaser JSON) |
 | `/submit` idempotency | `lib/result-repo.ts:runSubmitTransaction` (review-006 B001) | `tests/lib/result-repo.test.ts` (idempotent replay + P2002 race) |
-| `/pay` same-key replay | `lib/payment.ts:decidePaymentAction` (ADR-006) | `tests/lib/payment.test.ts` ("idempotent same-key replay") |
-| `/pay` already-paid new-key silent no-op | `lib/payment.ts:decidePaymentAction` (ADR-012) | `tests/lib/payment.test.ts` ("already-paid + NEW key → silent no-op") + DB partial unique index `payment_one_success_per_session_idx` |
-| `/pay` SELECT … FOR UPDATE per-session serialization | `lib/payment.ts:processPayment` | Live cookie-jar smoke + payment-table row-count assertions |
+| Webhook grant same-key replay | `lib/payment.ts:decidePaymentAction` (ADR-006), called by `payments/webhook` | `tests/lib/payment.test.ts` ("idempotent same-key replay") |
+| Webhook grant already-paid new-key silent no-op | `lib/payment.ts:decidePaymentAction` (ADR-012) | `tests/lib/payment.test.ts` ("already-paid + NEW key → silent no-op") + DB partial unique index `payment_one_success_per_session_idx` |
+| Webhook grant SELECT … FOR UPDATE per-session serialization | `lib/payment.ts:processPayment` | Live cookie-jar smoke + payment-table row-count assertions |
 | `step_event` audit row written inside the same PATCH transaction | `lib/step-repo.ts:runStepsTransaction` (ADR-009, T-502) | `tests/lib/step-repo.test.ts` (success path + rollback path) |
-| Parameterized SQL — no raw user input concatenation | All DB writes go through Prisma's query-builder (parameterized by construction). Exactly **one** `$queryRaw` callsite exists in app / lib / prisma / tests code: `lib/payment.ts:200` runs `tx.$queryRaw\`SELECT id FROM "session" WHERE id = ${sessionId}::uuid FOR UPDATE\`` as the ADR-006 per-session lock for `/pay`. Prisma's **tagged-template** form parameterizes `${sessionId}` as a bound prepared-statement value — it is not string-concatenated. The `sessionId` value comes from `verifyCookie(...)` (HMAC-validated), not from the request body. | Reproducer: `rg -n '\$queryRaw\|\$executeRaw' app lib prisma tests --glob '!node_modules' --glob '!package-lock.json'` returns exactly that one site; inspect it to confirm the `${sessionId}` interpolation is a bound parameter, not concatenation. |
+| Parameterized SQL — no raw user input concatenation | All DB writes go through Prisma's query-builder (parameterized by construction). Exactly **one** `$queryRaw` callsite exists in app / lib / prisma / tests code: `lib/payment.ts:200` runs `tx.$queryRaw\`SELECT id FROM "session" WHERE id = ${sessionId}::uuid FOR UPDATE\`` as the ADR-006 per-session lock for the payment grant (the webhook). Prisma's **tagged-template** form parameterizes `${sessionId}` as a bound prepared-statement value — it is not string-concatenated. The `sessionId` is also always a validated value — from `verifyCookie(...)` (HMAC) on the browser paths, or from the signature-verified webhook payload (a `.uuid()` field on a body whose HMAC was checked first) on the grant path — and `::uuid` casts it. | Reproducer: `rg -n '\$queryRaw\|\$executeRaw' app lib prisma tests --glob '!node_modules' --glob '!package-lock.json'` returns exactly that one site; inspect it to confirm the `${sessionId}` interpolation is a bound parameter, not concatenation. |
 | Same-origin guard on mutating routes (host + conditional scheme) | `lib/api/same-origin.ts` (this branch). Host comparison is always enforced; scheme comparison is enforced when `x-forwarded-proto` is present (Vercel sets it), and falls back to host-only when absent (cURL / local dev). Rejection envelope is `403 FORBIDDEN_ORIGIN`. | `tests/lib/api/same-origin.test.ts` (11 cases incl. scheme mismatch, forwarded-proto chain, fallback) |
 | `Idempotency-Key` restricted to printable ASCII | `lib/api/idempotency-key.ts` (this branch) | `tests/lib/api/idempotency-key.test.ts` (11 cases) |
 
@@ -69,14 +69,16 @@ a committed regression. No "verified in design only" rows.
 | Deleted session cookie → 401 | Route handler (`app/api/v1/sessions/me/steps/[stepKey]/route.ts:46`) + live smoke | `findSessionById` returns null → `noSession(requestId)` |
 | Free result leaks paid field | `tests/lib/serializers/result.test.ts` "LEAK INVARIANT" | `JSON.stringify(teaser)` must not contain `dailyCaloriesKcal`, `predictedTargetDate`, `curvePoints`, `"plan"`, `algorithmVersion` |
 | `/submit` double-call same session | `tests/lib/result-repo.test.ts` | second call returns the original result; no second insert |
-| `/pay` missing Idempotency-Key → 400 | Route handler + live smoke | `IDEMPOTENCY_KEY_SCHEMA.safeParse(null)` fails |
-| `/pay` Idempotency-Key with control char → 400 | `tests/lib/api/idempotency-key.test.ts` | rejects `\n`, `\0`, `\t`, non-ASCII |
-| `/pay` same-key replay | `tests/lib/payment.test.ts` | same `paymentId` on second call; one DB row |
-| `/pay` already-paid + new key → silent no-op | `tests/lib/payment.test.ts` + DB partial unique index | same `paymentId`; never inserts a second succeeded row |
+| Webhook `idempotencyKey` with control char / non-ASCII → 422 | `tests/lib/payment-webhook.test.ts`, `tests/lib/api/idempotency-key.test.ts` | `WEBHOOK_PAYLOAD_SCHEMA` reuses `IDEMPOTENCY_KEY_SCHEMA`; rejects `\n`, `\0`, non-ASCII |
+| Webhook bad/absent signature → 401 | `tests/lib/payment-webhook.test.ts` + live smoke | `verifyWebhookSignature` rejects tampered/missing/wrong-secret/length-mismatch |
+| Webhook amount/currency/status mismatch → 422 | `tests/lib/payment-webhook.test.ts` | `validateWebhookPayload` checks against the server price constants |
+| Webhook grant same-key replay | `tests/lib/payment.test.ts` | same `paymentId` on second call; one DB row |
+| Webhook grant already-paid + new key → silent no-op | `tests/lib/payment.test.ts` + DB partial unique index | same `paymentId`; never inserts a second succeeded row |
+| Webhook for unknown / not-submitted session → 404 / 409 | Route handler (`app/api/v1/payments/webhook/route.ts`) + live smoke | provider-facing 4xx, not 500 |
 | Cross-origin browser POST (host mismatch) | `tests/lib/api/same-origin.test.ts` | 403 FORBIDDEN_ORIGIN on host mismatch |
 | Cross-scheme POST (http origin against TLS-terminated host) | `tests/lib/api/same-origin.test.ts` | 403 FORBIDDEN_ORIGIN when `x-forwarded-proto` is present and `URL(origin).protocol` differs |
 | `Origin: null` / malformed | `tests/lib/api/same-origin.test.ts` | rejected |
-| SQL injection via body | All DB writes go through Prisma's parameterized query-builder. The **only** `$queryRaw` callsite in app / lib / prisma / tests is `lib/payment.ts:200` — the per-session lock `SELECT id FROM "session" WHERE id = ${sessionId}::uuid FOR UPDATE` — and it uses Prisma's tagged-template form (so `${sessionId}` is bound, not concatenated). The `sessionId` value comes from `verifyCookie`, not the request body. | `rg -n '\$queryRaw\|\$executeRaw' app lib prisma tests --glob '!node_modules' --glob '!package-lock.json'` returns exactly that one site; the §2 row walks through it. |
+| SQL injection via body | All DB writes go through Prisma's parameterized query-builder. The **only** `$queryRaw` callsite in app / lib / prisma / tests is `lib/payment.ts:200` — the per-session lock `SELECT id FROM "session" WHERE id = ${sessionId}::uuid FOR UPDATE` — and it uses Prisma's tagged-template form (so `${sessionId}` is bound, not concatenated). The `sessionId` is a validated value (HMAC cookie on browser paths, or a `.uuid()` field of the signature-verified webhook body on the grant path) and is `::uuid`-cast. | `rg -n '\$queryRaw\|\$executeRaw' app lib prisma tests --glob '!node_modules' --glob '!package-lock.json'` returns exactly that one site; the §2 row walks through it. |
 
 ## 3.1 Response headers + caching (production-hardening branch)
 
@@ -164,8 +166,8 @@ Reproducer: `npm audit --omit=dev` → "found 0 vulnerabilities".
 
 Best-effort, **Postgres-backed** fixed-window limiter on the hot write
 routes — `POST /api/v1/sessions`, step `PATCH`, `POST /submit`,
-`POST /pay` (`lib/api/rate-limit.ts`). Read routes and `/healthz` are
-not limited.
+`POST /payments/checkout`, `POST /payments/webhook`
+(`lib/api/rate-limit.ts`). Read routes and `/healthz` are not limited.
 
 | Property | Choice | Why |
 | - | - | - |
@@ -174,7 +176,7 @@ not limited.
 | Algorithm | Fixed window, `count` via Prisma upsert+increment | Simple + atomic-enough; a tiny under-count race under heavy concurrency is acceptable for a throttle. |
 | On store error | **Fail-open** (allow) | A limiter outage must never break the demo loop. |
 | Breach response | `429 RATE_LIMITED` + `Retry-After` | `ERROR_CODES.RATE_LIMITED` (previously reserved). |
-| Limits (per 60s/identity) | sessions 20, steps 80, submit 15, pay 15 | Generous for the 6-step browser flow + edits + README cURL walkthrough; tight enough to throttle scripted abuse. |
+| Limits (per 60s/identity) | sessions 20, steps 80, submit 15, checkout 20, webhook 30 | Generous for the 6-step browser flow + edits + README cURL walkthrough; tight enough to throttle scripted abuse. |
 | Cleanup | opportunistic prune of expired rows (~2% of calls) | Bounds table growth without a cron; `expires_at` is indexed for a scheduled sweep if desired. |
 
 Honest scope: this bounds a single IP/UA/cookie identity per window. A

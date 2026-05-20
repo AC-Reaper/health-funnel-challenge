@@ -11,7 +11,8 @@
 
 - All JSON endpoints live under `/api/v1`. The version is in the path so a
   future v2 can coexist.
-- One browser route exists outside `/api/v1`: `GET /pay` (mock payment page).
+- Two browser routes exist outside `/api/v1`: `GET /pay` (the upsell page)
+  and `GET /checkout` (the mock payment-provider page). See §6.
 - Content type is always `application/json; charset=utf-8` for requests and
   responses. No multipart, no form-url-encoded.
 - Times are ISO-8601 UTC strings (`2026-05-18T09:30:00.000Z`). Dates are
@@ -50,9 +51,12 @@
   endpoints require the signed httpOnly cookie that browsers don't expose to
   JS, **and** SameSite=Lax blocks cross-site POSTs. Same-origin only for the
   demo.
-- **Same-origin guard** (`lib/api/same-origin.ts`): every mutating route
-  (POST /sessions, PATCH /steps/:stepKey, POST /submit, POST /pay) runs
-  `checkSameOrigin` before any cookie read. If the request carries an
+- **Same-origin guard** (`lib/api/same-origin.ts`): every browser-facing
+  mutating route (POST /sessions, PATCH /steps/:stepKey, POST /submit,
+  POST /payments/checkout) runs `checkSameOrigin` before any cookie read.
+  (`POST /api/v1/payments/webhook` is **not** same-origin guarded — a
+  real provider calls cross-origin; its auth is the HMAC signature,
+  §7b.) If the request carries an
   `Origin` header, both its **host** and its **scheme** are compared
   to the receiving end: host vs `x-forwarded-host ?? host`,
   case-insensitive; scheme vs `x-forwarded-proto` when present (the
@@ -115,7 +119,7 @@ All errors share one envelope, regardless of status code:
 | 413 | `PAYLOAD_TOO_LARGE` | Request body exceeded the `MAX_BODY_BYTES` (16 KB) cap. Largest legitimate body in the funnel is well under 1 KB; see `lib/api/parse-body.ts` and `docs/08-security-hardening.md` §3.2. |
 | 422 | `VALIDATION_ERROR` | Zod validation failed on body or step. |
 | 422 | `INCOMPLETE_ASSESSMENT` | `/submit` called while required answers are missing. |
-| 429 | `RATE_LIMITED` | Best-effort fixed-window rate limit exceeded on a write route (`POST /sessions`, step `PATCH`, `/submit`, `/pay`). Carries a `Retry-After` header. See `docs/08-security-hardening.md` §3.5 and ADR-016. |
+| 429 | `RATE_LIMITED` | Best-effort fixed-window rate limit exceeded on a write route (`POST /sessions`, step `PATCH`, `/submit`, `payments/checkout`, `payments/webhook`). Carries a `Retry-After` header. See `docs/08-security-hardening.md` §3.5 and ADR-016. |
 | 500 | `INTERNAL_ERROR` | Unhandled server failure. Logged with `requestId`. |
 
 ---
@@ -444,11 +448,19 @@ curl -sS -c $JAR -b $JAR -X POST "$BASE/api/v1/sessions/me/submit" -H 'Content-T
 # 4. Teaser
 curl -sS -c $JAR -b $JAR "$BASE/api/v1/results/me" | jq
 
-# 5. Pay (mock)
-curl -sS -c $JAR -b $JAR -X POST "$BASE/api/v1/pay" \
-  -H "Idempotency-Key: $(uuidgen)" -H 'Content-Type: application/json' -d '{}' | jq
+# 5. Create checkout (browser step — cannot grant; stays teaser)
+curl -sS -c $JAR -b $JAR -X POST "$BASE/api/v1/payments/checkout" \
+  -H 'Content-Type: application/json' -d '{}' | jq
 
-# 6. Full result
+# 6. Act as the provider: sign + POST the webhook (the only grant path,
+#    ADR-017). PAYMENT_WEBHOOK_SECRET must match the server env.
+SID=$(curl -sS -c $JAR -b $JAR "$BASE/api/v1/sessions/me" | jq -r .sessionId)
+PAYLOAD="{\"eventType\":\"checkout.completed\",\"sessionId\":\"$SID\",\"idempotencyKey\":\"$(uuidgen)\",\"amountCents\":999,\"currency\":\"USD\",\"status\":\"succeeded\"}"
+SIG="sha256=$(printf '%s' "$PAYLOAD" | openssl dgst -sha256 -hmac "$PAYMENT_WEBHOOK_SECRET" | sed 's/^.*= //')"
+curl -sS -X POST "$BASE/api/v1/payments/webhook" \
+  -H 'Content-Type: application/json' -H "X-Payment-Signature: $SIG" -d "$PAYLOAD" | jq
+
+# 7. Full result
 curl -sS -c $JAR -b $JAR "$BASE/api/v1/results/me" | jq
 ```
 
