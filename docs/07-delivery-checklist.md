@@ -10,12 +10,14 @@
 
 ## Product / docs
 
-- [x] `02-architecture.md` v2 reflects accepted design (ADR-001…016)
+- [x] `02-architecture.md` v2 reflects accepted design (ADR-001…019)
 - [x] `03-database-design.md` matches the shipped schema — 5 domain
       tables + the operational `rate_limit` table (ADR-016) + ER
-      Mermaid (incl. `step_event`)
-- [x] `04-api-design.md` matches the seven shipped endpoints + ADR-014
-      cookie TTL + `429 RATE_LIMITED` (ADR-016)
+      Mermaid (incl. `step_event`); three migrations listed
+- [x] `04-api-design.md` matches the ten shipped endpoints (incl. mock
+      `POST /api/v1/pay` ADR-018, `payments/checkout` + signed
+      `payments/webhook` ADR-017, and demo `results/by-session` ADR-019) +
+      ADR-014 cookie TTL + `429 RATE_LIMITED` (ADR-016)
 - [x] `05-ai-collaboration-log.md` has substantive per-phase entries
 - [x] `06-review-log.md` is current through the latest review
       (reviews 000…013 all `Resolved` or

@@ -10,10 +10,12 @@
 
 ## 1. Attack surface
 
-The shipped surface is **seven HTTP endpoints under `/api/v1`** plus
+The shipped surface is **ten HTTP endpoints under `/api/v1`** plus
 browser routes (`/`, `/funnel`, `/pay`, `/checkout`, `/results`). All client
-input lands at one of the seven API routes, four of which are
-state-changing.
+input lands at one of the ten API routes; the state-changing (DB-writing)
+ones are `POST /sessions`, the step `PATCH`, `POST /submit`, `POST /pay`,
+and the signed `POST /payments/webhook` (`POST /payments/checkout` is a
+POST but writes nothing, and the two grant paths share one transaction).
 
 | Channel | Threat | First line of defense |
 | - | - | - |

@@ -193,7 +193,11 @@ Four required tables, one optional. Exact Prisma schema lives in `docs/03-databa
 - `id uuid pk`, `session_id uuid fk → session.id ON DELETE CASCADE`, `step_key enum`, `value_json jsonb`, `created_at timestamptz default now()`.
 - Written inside the same `db.$transaction` as the assessment write, so the audit cannot disagree with the data row. No unique constraint — replays are valid audit data showing the user's input cadence.
 
-Index notes: `session(updated_at)` for any janitor job; `payment(session_id, idempotency_key) UNIQUE` (idempotency); `payment(session_id) WHERE status='succeeded'` UNIQUE partial (ADR-012 backstop, SQL-only); `result(session_id) UNIQUE`; `step_event(session_id, created_at)` btree for audit reads; `session(id)` is the cookie's only key.
+**`rate_limit`** (ADR-016, operational — **not** a domain entity, no FK to `session`) — backs the best-effort, Postgres-backed fixed-window limiter. One row per `(route, identity-hash, time-window)`.
+- `key text pk` (embeds route + identity-hash + window-epoch), `count int default 0`, `window_start timestamptz`, `expires_at timestamptz`.
+- Identity-hash is a keyed HMAC-SHA256 (peppered with `SESSION_COOKIE_SECRET`) of IP + session id + User-Agent — no raw IP/UA stored. Expired rows pruned opportunistically; fail-open. Field-level detail in `docs/03-database-design.md` §3.
+
+Index notes: `session(updated_at)` for any janitor job; `payment(session_id, idempotency_key) UNIQUE` (idempotency); `payment(session_id) WHERE status='succeeded'` UNIQUE partial (ADR-012 backstop, SQL-only); `result(session_id) UNIQUE`; `step_event(session_id, created_at)` btree for audit reads; `rate_limit(expires_at)` btree for the prune sweep; `session(id)` is the cookie's only key.
 
 ---
 
