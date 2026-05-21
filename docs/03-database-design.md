@@ -104,10 +104,13 @@ erDiagram
     }
 ```
 
-Not visualised: the partial unique index `payment_one_success_per_session_idx`
-on `payment(session_id) WHERE status='succeeded'` (Prisma cannot model
-partial indexes, so it lives in `migration.sql` only). It backstops
-ADR-012's "exactly one successful payment per session" invariant.
+Not visualised: (1) the operational `rate_limit` table (ADR-016) — it has
+no FK to any domain entity, so it sits outside the relationship graph; its
+columns/indexes are in §3 and §5. (2) the partial unique index
+`payment_one_success_per_session_idx` on
+`payment(session_id) WHERE status='succeeded'` (Prisma cannot model partial
+indexes, so it lives in `migration.sql` only) — it backstops ADR-012's
+"exactly one successful payment per session" invariant.
 
 ## 2.1 Logical model mapping
 
@@ -251,6 +254,24 @@ the assessment write so the audit can never disagree with the data
 Index: `(session_id, created_at)` btree. No unique constraint — replays
 write additional rows so the audit reflects the user's input cadence.
 
+### `rate_limit` (operational)
+
+Not a domain entity and **not linked to `session`** (a `/sessions` POST is
+throttled before any session exists). Backs the best-effort, Postgres-backed
+fixed-window rate limiter (ADR-016): one row per
+`(route, identity-hash, time-window)`, where `key` embeds all three.
+
+| Column | Type | Null | Default | Notes |
+| - | - | - | - | - |
+| `key` | `text` | no | — | PK. `"<route>:<identity-hash>:<window-epoch>"`. The identity hash is a keyed HMAC-SHA256 (peppered with `SESSION_COOKIE_SECRET`) of IP + session id + User-Agent — no raw IP/UA is stored. |
+| `count` | `int` | no | `0` | Incremented per request in the window (Prisma upsert). |
+| `window_start` | `timestamptz` | no | — | Start of the fixed window. |
+| `expires_at` | `timestamptz` | no | — | Window end; indexed for opportunistic pruning. |
+
+Index: `(expires_at)` btree (`rate_limit_expires_at_idx`). Primary key on
+`key`. No FK. Expired rows are pruned opportunistically (~2% of calls);
+the limiter is fail-open, so a store error never blocks a request.
+
 ## 4. Enums
 
 Postgres native enums (Prisma `@@map` for snake_case at the DB layer).
@@ -276,6 +297,7 @@ requires an ADR.
 - `payment(session_id, idempotency_key)` UNIQUE — enforces same-key idempotency (ADR-006).
 - `payment(session_id) WHERE status='succeeded'` UNIQUE (partial) — backstops ADR-012 "one successful payment per session". Defined in SQL only; Prisma cannot model partial indexes.
 - `step_event(session_id, created_at)` btree — supports audit reads ordered by time per session.
+- `rate_limit(key)` PRIMARY KEY (operational table, ADR-016) + `rate_limit(expires_at)` btree (`rate_limit_expires_at_idx`) — supports the opportunistic prune of expired windows.
 - `assessment(session_id)` is the primary key (implicit unique).
 - No additional FK indexes added: Postgres creates an index for primary
   keys and unique constraints automatically; the `payment.session_id`
@@ -297,16 +319,22 @@ requires an ADR.
   Adds the `step_event` table + `(session_id, created_at)` index + FK
   with `ON DELETE CASCADE`. Standard `prisma migrate diff` output, no
   manual edits.
+- Rate-limit migration: `prisma/migrations/20260521000000_add_rate_limit/migration.sql`
+  (ADR-016). Adds the operational `rate_limit` table (PK on `key`) +
+  `rate_limit_expires_at_idx` btree on `(expires_at)`. No FK. Standard
+  `prisma migrate diff` output, no manual edits.
 - To apply against Supabase (or any Postgres):
   1. `cp .env.example .env` and fill `DATABASE_URL` (pooled) and
      `DIRECT_URL` (direct). Supabase exposes both in the project's
      **Connection** settings.
   2. `npm install`
   3. `npm run db:deploy` (runs `prisma migrate deploy` against
-     `DIRECT_URL`; the pooler does not support migrations). Applies
-     both `20260518000000_init` and `20260519000000_add_step_event`.
-  4. Sanity check: `psql "$DIRECT_URL" -c "\dt"` lists the five tables
-     (`session`, `assessment`, `result`, `payment`, `step_event`).
+     `DIRECT_URL`; the pooler does not support migrations). Applies all
+     three migrations: `20260518000000_init`,
+     `20260519000000_add_step_event`, and `20260521000000_add_rate_limit`.
+  4. Sanity check: `psql "$DIRECT_URL" -c "\dt"` lists the six tables —
+     five domain (`session`, `assessment`, `result`, `payment`,
+     `step_event`) + one operational (`rate_limit`).
 - For schema changes after this branch: edit `prisma/schema.prisma`,
   then `npx prisma migrate dev --name <slug>` (requires a dev Postgres
   reachable via `DIRECT_URL`; this generates a new timestamped
