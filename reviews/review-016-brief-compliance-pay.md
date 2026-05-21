@@ -2,11 +2,11 @@
 
 ## Status
 
-Open — original review covered PR #1, `feature/brief-compliance-pay` at
-`5c59e43` against `main` (`10b1dc3`). Closeout re-review at `b3a1d24`
-verifies I002 and N001 are fixed, but I001 remains partially open because
-`docs/02-architecture.md` still carries stale ADR-001…017 / pre-ADR-018
-status text.
+Resolved — original review covered PR #1, `feature/brief-compliance-pay`
+at `5c59e43` against `main` (`10b1dc3`). Closeout re-review at
+`b3a1d24` verified I002 and N001. Final confirmation after the
+`docs/02-architecture.md` closeout follow-up verifies I001 as well. No
+Blocking, Important, or Nice-to-have findings remain.
 
 Scope reviewed:
 
@@ -61,6 +61,10 @@ Scope reviewed:
   - Manual cookie-jar `POST /api/v1/pay` grants without
     `PAYMENT_WEBHOOK_SECRET`; `/results/me` changes from `teaser` to
     `full`.
+- Final confirmation: `docs/02-architecture.md` no longer carries the
+  stale ADR-001…017 range or the pre-ADR-018 "paid sessionId dropped"
+  status text; it now reflects ADR-001…019 and the seeded demo
+  paid-session path.
 
 ## Findings
 
@@ -101,15 +105,12 @@ None.
   `docs/01` R-014 and out-of-scope text, add `/pay` to same-origin docs,
   and change webhook comments from "only grant path" to "production grant
   path".
-- Closeout at `b3a1d24`: Partially resolved. README, docs/01, docs/04,
-  docs/08, the webhook route comment, and memory status now use the
-  two-path ADR-018/019 model. However, `docs/02-architecture.md` still
-  says the decision gate and accepted-decisions section are ADR-001…017,
-  still describes pre-seeded paid sessionId as dropped in the status
-  header, and still says R8 is mitigated by ADR-001…017. Because docs/02
-  is a linked evaluator-facing architecture artifact, I001 remains open
-  until those remaining status/range lines are updated to ADR-001…019 and
-  the ADR-018/019 paid-sessionId scope.
+- Closeout: Resolved. README, docs/01, docs/04, docs/08, the webhook route
+  comment, and memory status now use the two-path ADR-018/019 model. The
+  follow-up also cleared the remaining `docs/02-architecture.md`
+  stragglers: the decision gate and accepted-decisions section now say
+  ADR-001…019, the status header no longer says the paid sessionId was
+  dropped, and the R8 mitigation row points at the current ADR range.
 
 #### I002 — `results/by-session` exposes all submitted sessions by bare UUID, not just demo-seeded sessions
 
@@ -178,8 +179,7 @@ Live/DB closeout:
 
 ## Final Recommendation
 
-Do not merge yet. The grant/read-by-id implementation is now in good
-shape, and I002/N001 are verified fixed locally and on the preview. One
-Important documentation finding remains: finish the `docs/02-architecture.md`
-ADR-001…019/status cleanup so the architecture artifact no longer
-contradicts ADR-018/019.
+Mergeable. The grant/read-by-id implementation is in good shape, the
+seeded demo scope is enforced, the seed script proves paid/full versus
+free/teaser, and the evaluator-facing docs now consistently describe the
+ADR-018/019 two-path payment model.

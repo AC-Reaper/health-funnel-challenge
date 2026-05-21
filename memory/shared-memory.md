@@ -106,7 +106,7 @@ that the browser UI drives.
 - Test suite → `tests/**` (vitest, 255 tests on `feature/brief-compliance-pay`)
 - ADR log → `memory/decisions.md` (ADR-001…019 Accepted)
 - Open questions → `memory/open-questions.md` (no open blocker)
-- Latest reviews → `reviews/review-016-brief-compliance-pay.md` (closeout `b3a1d24`: I002/N001 resolved; I001 docs/02 drift now cleared, awaiting Codex final confirmation before merge); `reviews/review-015-payment-webhook.md` (Resolved at `a220c6b`, merged to `main` @ `10b1dc3`); `reviews/review-014-rate-limit.md` (Resolved, merged to `main` @ `ffdab50`); earlier reviews are resolved for their branches.
+- Latest reviews → `reviews/review-016-brief-compliance-pay.md` (Resolved after final confirmation: I001/I002/N001 fixed; branch mergeable); `reviews/review-015-payment-webhook.md` (Resolved at `a220c6b`, merged to `main` @ `10b1dc3`); `reviews/review-014-rate-limit.md` (Resolved, merged to `main` @ `ffdab50`); earlier reviews are resolved for their branches.
 
 ## Current Branch
 
@@ -128,7 +128,7 @@ webhook:
   superseded-in-part). No schema/migration change; `lib/payment.ts`
   untouched.
 
-**review-016 fixes (ADR-019)** — partially accepted on closeout:
+**review-016 fixes (ADR-019)** — accepted on closeout and final-confirmed:
 - I002: `GET /results/by-session` scoped to demo-seeded sessions via a
   marker User-Agent (`DEMO_SEED_USER_AGENT` + pure `isDemoSeedSession` in
   `lib/session.ts`; seed sends it on session create). A real session id →
@@ -140,15 +140,15 @@ webhook:
   refreshed (255 tests, 10 routes, review log through 016). Closeout
   follow-up: `docs/02-architecture.md` stragglers (v1→v2 status blurb,
   Decision gate, §0 header, R8 row, "pre-seeded paid sessionId dropped")
-  cleared to ADR-001…019 / two-path truth. Awaiting Codex final
-  confirmation before merge.
+  cleared to ADR-001…019 / two-path truth. Codex final confirmation marks
+  review-016 Resolved.
 
 Gates: `tsc` clean, `npm test` 255 green, `next build` clean (both `/pay`
 and `results/by-session` in the route manifest), `db:validate` clean,
 diff-check clean, raw-query grep still only `lib/payment.ts:200`; preview
 seed/by-session/manual `/pay` smoke pass. The `docs/02-architecture.md`
-cleanup that was the sole remaining review-016 item is now done; awaiting
-Codex final confirmation before merge.
+cleanup that was the sole remaining review-016 item is final-confirmed;
+the branch is mergeable from Codex's review perspective.
 
 ### Prior branch (merged)
 
