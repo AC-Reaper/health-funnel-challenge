@@ -41,6 +41,7 @@ rationale, and consequences:
 | ADR-016 | Rate limiting: Postgres-backed best-effort fixed-window on hot write routes (reverses the earlier defer) | Accepted |
 | ADR-017 | Payment trust boundary: entitlement granted only by a signature-verified (simulated) provider webhook; browser checkout cannot (amends ADR-006) | Accepted |
 | ADR-018 | Brief-compliance: restore the brief's mock `POST /api/v1/pay` (secret-free, same-origin) alongside the webhook + add `GET /results/by-session` + seed for a paid test sessionId; subscription table & UX kept as documented trade-offs (amends ADR-010/017) | Accepted |
+| ADR-019 | `GET /results/by-session` scoped to demo-seeded sessions via a marker User-Agent (`isDemoSeedSession`) so a real session id can't be read by bare UUID; `seed:demo` self-verifies the paid/free contrast (refines ADR-018) | Accepted |
 
 ---
 
