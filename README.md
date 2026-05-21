@@ -402,31 +402,43 @@ end user.
 
 ```
 To: yitengruntu12123@gmail.com, alex@arkon-tech.com, rip@arkon-tech.com
-Subject: 【姓名】_全栈挑战_20260520
+Subject: 【姓名】_全栈挑战_20260522
 
 各位老师好，
 
-提交全栈挑战的最终交付，重点信息如下：
+这是全栈挑战的最终交付，四项交付物如下：
 
-• 在线 demo:   https://project-u415a.vercel.app/
-• 源码:        https://github.com/AC-Reaper/health-funnel-challenge
-• API 文档:    docs/04-api-design.md
-• DB 设计:     docs/03-database-design.md
-• 安全审阅:    docs/08-security-hardening.md
-• AI 协作记录: docs/05-ai-collaboration-log.md
+1. 在线 demo（公网可达，可完整走 funnel + mock 支付）
+   https://project-u415a.vercel.app/
+2. 源码 + README（启动说明 + API 文档）
+   https://github.com/AC-Reaper/health-funnel-challenge
+3. 数据库 Schema 图与设计：docs/03-database-design.md
+4. AI 协作复盘：docs/05-ai-collaboration-log.md（按天记录 Claude 实现 / Codex 评审）
 
-README 顶部的「Submission info」+「Demo path」可以一次性走完六步、
-完成 mock 支付、看到 full result。如果只想直接复现一个 paid
-sessionId，复制 README §Paid test session 的 cURL 段落即可
-（脚本会输出 sessionId / paymentId / entitlementStatus）。
+付费前后差异化返回，两种复现方式（均无需任何密钥）：
+• 已支付测试 sessionId：1f930fbf-8b4e-40d8-ad92-49a76233d19e
+  免费对照 sessionId：  d268309a-3edb-4efa-92a3-3b7ca40c08bb
+  浏览器直接打开即可对比：
+  .../api/v1/results/by-session?sessionId=1f930fbf-8b4e-40d8-ad92-49a76233d19e  → 完整数据
+  .../api/v1/results/by-session?sessionId=d268309a-3edb-4efa-92a3-3b7ca40c08bb  → 脱敏 teaser
+• 可重放的 /pay cURL（创建 session → 6 步 → submit → POST /api/v1/pay）
+  见 README §Paid test session。
 
 技术摘要：
-• Next.js 15 App Router + TypeScript + Zod + Prisma + Postgres
-  (Supabase) + Vercel.
-• 匿名 session、HMAC-signed httpOnly cookie、server-side TTL。
-• 10 个 /api/v1 路由，全部 Zod 校验。
-• 255 个 vitest 单元；Codex 评审记录截至 review-016 全部 Resolved；`npm audit --omit=dev` 干净。
-• 评审记录: docs/06-review-log.md。
+• Next.js 15 App Router + TypeScript + Zod（每个 API 边界校验）+ Prisma +
+  PostgreSQL (Supabase) + Vercel。
+• 匿名 session：HMAC 签名 httpOnly cookie + 服务端 TTL；分步保存 + 进度恢复
+  （first-incomplete-step）。
+• 服务端计算（BMI / 建议摄入 / 目标日期 / 周曲线，版本化算法）；结果页双序列化器
+  —— teaser 在类型层面就不可能输出付费字段，有泄漏测试守护。
+• 支付两条路径共用一个事务原语：题目要求的可直接调用 mock POST /api/v1/pay
+  （同源 + cookie + Idempotency-Key，DB 幂等），以及生产级签名校验 webhook
+  （浏览器无法直接 mint paid）。
+• 10 个 /api/v1 路由全部 Zod 校验；255 个 vitest 单元测试；Codex 评审 000…016
+  全部 Resolved；npm audit --omit=dev 0 漏洞。
+• 评审记录 docs/06-review-log.md；决策记录 memory/decisions.md（ADR-001…019）。
 
-期待反馈。
+期待反馈，谢谢！
+
+【姓名】
 ```
