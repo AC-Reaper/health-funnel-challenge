@@ -94,7 +94,11 @@ Consequences:
 
 ## ADR-006: Payment — mocked `/pay` with `Idempotency-Key`
 
-Status: Accepted (2026-05-18)
+Status: Accepted (2026-05-18); grant **route shape superseded in part by
+ADR-017 (2026-05-21)** — entitlement is now granted only by the
+signature-verified `POST /api/v1/payments/webhook`, not a browser
+`POST /api/v1/pay`. The single-transaction + DB-idempotency semantics
+below (`processPayment`) are unchanged and reused.
 
 Context:
 Brief explicitly asks for a mock `/pay` and grades the closed-loop semantics. A toy button that flips client state would lose points; a fake-but-realistic webhook contract scores.
@@ -367,3 +371,57 @@ Consequences:
   transaction pooling at demo scale.
 - `429 RATE_LIMITED` flips from "reserved" to enforced in docs/04.
 - Limits (per 60s/identity): sessions 20, steps 80, submit 15, pay 15.
+  (After ADR-017 the `pay` route was replaced by `checkout` 20 +
+  `webhook` 30; see `lib/api/rate-limit.ts`.)
+
+## ADR-017: Payment trust boundary — signature-verified webhook grants entitlement
+
+Status: Accepted (2026-05-21, `feature/payment-webhook`)
+
+Amends ADR-006 (the *grant mechanism* of the mock payment); keeps
+ADR-012 (idempotent replay) and ADR-007 (entitlement on `session`).
+
+Context:
+The MVP `POST /api/v1/pay` was browser-callable and granted entitlement
+directly (insert payment + flip `entitlement_status='paid'`). That is
+fine for a mock, and was documented as a deliberate pre-production
+boundary (docs/08 §5). Owner asked to make the boundary real before any
+go-live: entitlement must come only from a payment-provider webhook that
+the server verifies (signature + amount + currency + status); the
+browser may at most create a checkout.
+
+Decision:
+Implement the production-correct boundary as a **simulated** provider —
+no real Stripe (the brief asks for a mock, and a real integration would
+break the cURL reproducer and add a dependency + secrets late).
+- `POST /api/v1/payments/checkout` (browser, cookie + same-origin +
+  rate-limited) creates the order descriptor. It **cannot** grant.
+- `POST /api/v1/payments/webhook` is the only grant path. No cookie / no
+  same-origin (providers are cross-origin); the auth is an HMAC-SHA256
+  signature over the raw body (`X-Payment-Signature`) keyed by
+  `PAYMENT_WEBHOOK_SECRET`. After signature + amount/currency/status
+  checks it delegates to the unchanged `processPayment`.
+- The `/checkout` mock-provider page + `confirmMockPayment` server
+  action play the provider for the browser one-click: the secret + the
+  signing live server-side only. The README cURL acts as the provider
+  directly and demonstrates wrong-signature → 401.
+- `POST /api/v1/pay` is removed.
+
+Reason:
+- Demonstrates the exact "browser can't mint paid; only a
+  signature-verified callback can" boundary — the brief's "支付回调闭环"
+  criterion — with zero new dependency and a working cURL reproducer.
+- `processPayment` (FOR UPDATE + decidePaymentAction + DB idempotency)
+  is reused unchanged, so the grant semantics and their tests are
+  untouched; only the *caller* moved behind the signature gate.
+
+Consequences:
+- New env `PAYMENT_WEBHOOK_SECRET` (Zod `.min(32)`; fails fast at boot).
+  Owner sets it on Vercel.
+- API surface: `/pay` → `payments/checkout` + `payments/webhook` (eight
+  endpoints). New `401 INVALID_SIGNATURE`.
+- No schema/migration change; the `payment` table is unchanged.
+- Honest scope: the provider is simulated. Swapping in real Stripe later
+  means replacing the mock-provider page + the signing in the server
+  action with Stripe Checkout + `stripe.webhooks.constructEvent`; the
+  webhook handler's verify→validate→processPayment shape stays.

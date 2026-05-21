@@ -42,9 +42,10 @@
       (`tests/lib/serializers/result.test.ts`)
 - [x] `/submit` idempotency test passes
       (`tests/lib/result-repo.test.ts`)
-- [x] `/pay` same-key replay test passes; already-paid different-key
-      call silently no-ops without inserting a second `payment` row
-      (`tests/lib/payment.test.ts`)
+- [x] Payment-grant same-key replay test passes; already-paid
+      different-key call silently no-ops without inserting a second
+      `payment` row (`tests/lib/payment.test.ts`; grant now flows
+      through the signed webhook, ADR-017)
 - [x] Cookie-TTL hardening: `iat` + 30d expiry + 60s clock-skew
       (`tests/lib/session.test.ts` "verifyCookie TTL")
 - [x] Boundary tests for step inputs
@@ -62,18 +63,28 @@
 - [x] `Idempotency-Key` restricted to 1-128 printable-ASCII chars
       (`lib/api/idempotency-key.ts`, 11 cases in
       `tests/lib/api/idempotency-key.test.ts`)
-- [x] `/pay` rejects pre-`/submit` with `409 NOT_SUBMITTED` at both
-      the API boundary (`app/api/v1/pay/route.ts`) and the state
-      machine (`lib/payment.ts:decidePaymentAction` returns
-      `not_submitted`); 4 cases in `tests/lib/payment.test.ts`
+- [x] Payment cannot precede `/submit`: `POST /api/v1/payments/checkout`
+      returns `409 NOT_SUBMITTED` for a draft session, and the
+      signature-verified `POST /api/v1/payments/webhook` returns
+      `409 NOT_SUBMITTED` / `404 NOT_FOUND` for a not-submitted / unknown
+      session before reaching the grant (ADR-017); `processPayment`
+      remains the authoritative re-check
 - [x] Security review at `docs/08-security-hardening.md` with attack
       surface, control evidence table, and out-of-scope rationale
 - [x] Logical model mapping (User / Subscription / Payment) in
       `docs/03-database-design.md` §2.1
 - [x] Rate limiting on hot write routes — Postgres-backed best-effort
       fixed-window (`lib/api/rate-limit.ts`, ADR-016); `/sessions`,
-      step PATCH, `/submit`, `/pay`; `429 RATE_LIMITED` + `Retry-After`;
+      step PATCH, `/submit`, `payments/checkout`, `payments/webhook`;
+      `429 RATE_LIMITED` + `Retry-After`;
       12 cases in `tests/lib/api/rate-limit.test.ts`
+- [x] Payment trust boundary — entitlement granted only by the
+      signature-verified `POST /api/v1/payments/webhook` (HMAC over raw
+      body + amount/currency/status check, ADR-017); browser
+      `payments/checkout` cannot mint `paid`; `POST /api/v1/pay`
+      removed. Pure sign/verify/validate in `lib/payment-webhook.ts`;
+      `tests/lib/payment-webhook.test.ts`. New env
+      `PAYMENT_WEBHOOK_SECRET` (set on Vercel).
 
 ## Deploy / demo
 

@@ -8,6 +8,9 @@ const schema = z.object({
   SESSION_COOKIE_SECRET: z
     .string()
     .min(32, "SESSION_COOKIE_SECRET must be at least 32 characters"),
+  PAYMENT_WEBHOOK_SECRET: z
+    .string()
+    .min(32, "PAYMENT_WEBHOOK_SECRET must be at least 32 characters"),
   NODE_ENV: z
     .enum(["development", "test", "production"])
     .default("development"),

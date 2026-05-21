@@ -109,9 +109,12 @@ export default async function PayPage() {
         <PayButton priceLabel={price} />
 
         <p className="mt-4 text-xs text-ink-500">
-          Mock checkout — no real charge. Pressing the button POSTs{" "}
-          <code className="font-mono">/api/v1/pay</code> with an{" "}
-          <code className="font-mono">Idempotency-Key</code> header.
+          Mock checkout — no real charge. The button creates a checkout via{" "}
+          <code className="font-mono">/api/v1/payments/checkout</code> and
+          redirects to a simulated provider; entitlement is granted only by
+          the signature-verified{" "}
+          <code className="font-mono">/api/v1/payments/webhook</code>{" "}
+          (ADR-017).
         </p>
       </div>
     </main>
