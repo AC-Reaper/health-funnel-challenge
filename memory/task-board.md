@@ -28,7 +28,7 @@ see Done column.)
 
 ## In Progress
 
-None.
+- T-601 — Claude — `feature/brief-compliance-pay` (off `main` @ `10b1dc3`, ADR-018). Re-reading the source brief (`../test.md`) surfaced three drifted deliverables; restored without removing the webhook. Restored mock `POST /api/v1/pay` (secret-free, same-origin + cookie + `Idempotency-Key`, reuses unchanged `processPayment`); added read-only `GET /api/v1/results/by-session?sessionId=<uuid>` (same leak-tested serializers, no cookie/secret); added `scripts/seed-demo.sh` (`npm run seed:demo`) that drives the real API to mint a paid + free session and print both ids (§五-1b/1c). Docs/memory synced (ADR-018; README §Paid test session leads with secret-free `/pay` + by-session, webhook kept as bonus; docs/02/03/04/07/08 + PROJECT_BRIEF reconciled; ADR-010/017 superseded-in-part). No schema/migration change; `lib/payment.ts` untouched. Gates: tsc clean, vitest 251, next build clean (both new routes in manifest). Awaiting Codex re-review (grant path) before merge.
 
 ## Review
 

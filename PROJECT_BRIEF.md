@@ -31,9 +31,12 @@ here so this file stands alone:
 Four deliverables, matching the brief's "4 大交付物".
 
 1. **Public demo URL** — anonymous user can walk the funnel and trigger
-   `/pay` from start to finish. The README's cookie-jar cURL walkthrough
-   doubles as the "show paid vs unpaid" proof; we do **not** ship a raw
-   paid `sessionId` because cookie-only auth makes it unusable (ADR-010).
+   `/pay` from start to finish. The brief's mock `POST /api/v1/pay`
+   (ADR-018) is restored as a secret-free, replayable callback, and
+   `npm run seed:demo` mints a paid + free test `sessionId` that a judge
+   diffs via `GET /api/v1/results/by-session` (brief §五-1b/1c). The
+   signature-verified webhook (ADR-017) remains as the production-grade
+   trust boundary the browser UI drives.
 2. **GitHub repo + README** — 60-second setup, env table, exact cURL
    walkthrough for the demo path, API doc pointer.
 3. **DB schema diagram** — entity relationships across session,
@@ -67,7 +70,8 @@ Four deliverables, matching the brief's "4 大交付物".
 Real auth, real payment provider, recurring `subscription` table, multi-device
 resume, i18n, A/B testing, ML scoring, email/notifications, admin dashboard,
 Sentry/APM, production-grade rate limiting, GraphQL/tRPC, `step_event` audit
-table (unless Day 5 has slack), pre-seeded paid `sessionId`, UUIDv7.
+table (unless Day 5 has slack), UUIDv7. (A paid test `sessionId` — originally
+listed out — is now provided per brief §五-1c; see ADR-018.)
 
 ## 6. Definition of done (per scoring criterion)
 

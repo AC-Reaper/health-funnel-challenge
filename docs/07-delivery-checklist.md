@@ -44,8 +44,9 @@
       (`tests/lib/result-repo.test.ts`)
 - [x] Payment-grant same-key replay test passes; already-paid
       different-key call silently no-ops without inserting a second
-      `payment` row (`tests/lib/payment.test.ts`; grant now flows
-      through the signed webhook, ADR-017)
+      `payment` row (`tests/lib/payment.test.ts`; the shared
+      `processPayment` grant primitive backs both the mock `/pay`
+      (ADR-018) and the signed webhook (ADR-017))
 - [x] Cookie-TTL hardening: `iat` + 30d expiry + 60s clock-skew
       (`tests/lib/session.test.ts` "verifyCookie TTL")
 - [x] Boundary tests for step inputs
@@ -53,7 +54,7 @@
       `tests/lib/validation/assessment.test.ts`,
       `tests/lib/health/calculator.test.ts`)
 - [x] No `any` without justification; `tsc --noEmit` clean
-- [x] 240 vitest tests green
+- [x] 251 vitest tests green
 
 ### Security
 
@@ -75,16 +76,23 @@
       `docs/03-database-design.md` §2.1
 - [x] Rate limiting on hot write routes — Postgres-backed best-effort
       fixed-window (`lib/api/rate-limit.ts`, ADR-016); `/sessions`,
-      step PATCH, `/submit`, `payments/checkout`, `payments/webhook`;
+      step PATCH, `/submit`, `pay`, `payments/checkout`, `payments/webhook`;
       `429 RATE_LIMITED` + `Retry-After`;
       12 cases in `tests/lib/api/rate-limit.test.ts`
-- [x] Payment trust boundary — entitlement granted only by the
-      signature-verified `POST /api/v1/payments/webhook` (HMAC over raw
+- [x] Payment trust boundary — the *production* boundary grants only via
+      the signature-verified `POST /api/v1/payments/webhook` (HMAC over raw
       body + amount/currency/status check, ADR-017); browser
-      `payments/checkout` cannot mint `paid`; `POST /api/v1/pay`
-      removed. Pure sign/verify/validate in `lib/payment-webhook.ts`;
-      `tests/lib/payment-webhook.test.ts`. New env
+      `payments/checkout` cannot mint `paid`. Pure sign/verify/validate in
+      `lib/payment-webhook.ts`; `tests/lib/payment-webhook.test.ts`. Env
       `PAYMENT_WEBHOOK_SECRET` (set on Vercel).
+- [x] Brief deliverable §三/§五-1b — directly-callable mock
+      `POST /api/v1/pay` (secret-free, same-origin + cookie +
+      `Idempotency-Key`, ADR-018) flips entitlement via the shared
+      `processPayment`; replayable README cURL needs no secret.
+- [x] Brief deliverable §五-1c — paid test sessionId: `npm run seed:demo`
+      mints a paid + free session and prints both ids; read-only
+      `GET /api/v1/results/by-session?sessionId=<id>` returns the same
+      leak-tested full/teaser serializers for a direct pre/post diff.
 
 ## Deploy / demo
 

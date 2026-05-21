@@ -22,14 +22,14 @@ state-changing.
 | Step PATCH | Out-of-order writes, prototype pollution, coherence violations | `lib/validation/steps.ts` (bounded enums + numeric ranges), `Object.hasOwn` step-key guard (B002), first-incomplete-step rule (ADR-008), `checkWeightCoherence` / `checkMainGoalChange` |
 | Submit | Inserting a result without a complete or coherent assessment | `FULL_ASSESSMENT_SCHEMA.superRefine` re-validates server-side; DB `UNIQUE (result.session_id)` + P2002 race recovery |
 | Results gate | Free user receiving paid fields | Two distinct serializer **types** (`TeaserResultDTO` vs `FullResultDTO`); type system cannot emit paid fields on teaser (review-001 §4) |
-| Pay | Browser minting `paid`, double-charge, replay storms | Grant only via signature-verified webhook (`X-Payment-Signature` HMAC, ADR-017) — browser checkout can't grant; DB `UNIQUE (session_id, idempotency_key)` + partial unique index `payment_one_success_per_session_idx WHERE status='succeeded'` (ADR-012) |
+| Pay | Browser minting `paid`, double-charge, replay storms | Two grant entries over one primitive: the brief's mock `POST /api/v1/pay` (same-origin + cookie + `Idempotency-Key`, ADR-018) and the production signature-verified webhook (`X-Payment-Signature` HMAC, ADR-017) the UI drives — browser *checkout* can't grant. Double-charge/replay closed for both by DB `UNIQUE (session_id, idempotency_key)` + partial unique index `payment_one_success_per_session_idx WHERE status='succeeded'` (ADR-012). See §3.6. |
 | Headers | Cross-site browser POSTs, CSRF-style attacks | `SameSite=Lax` + `HttpOnly` + `Secure` (prod) on the cookie; `checkSameOrigin` guard on every mutating route |
 
 ## 2. Existing controls (with citations)
 
 | Control | Where | How verified |
 | - | - | - |
-| Zod `.strict()` on every request body | `lib/validation/steps.ts`, `lib/validation/assessment.ts`, `app/api/v1/sessions/route.ts`, `app/api/v1/sessions/me/submit/route.ts`, `app/api/v1/payments/checkout/route.ts` (empty `{}` strict body); the webhook body is `WEBHOOK_PAYLOAD_SCHEMA` (`.strict`) in `lib/payment-webhook.ts` | `tests/lib/validation/steps.test.ts`, `tests/lib/validation/assessment.test.ts`, `tests/lib/api/parse-body.test.ts`, `tests/lib/payment-webhook.test.ts` |
+| Zod `.strict()` on every request body | `lib/validation/steps.ts`, `lib/validation/assessment.ts`, `app/api/v1/sessions/route.ts`, `app/api/v1/sessions/me/submit/route.ts`, `app/api/v1/payments/checkout/route.ts` + `app/api/v1/pay/route.ts` (empty `{}` strict body); the webhook body is `WEBHOOK_PAYLOAD_SCHEMA` (`.strict`) in `lib/payment-webhook.ts`; `GET /results/by-session` validates its `sessionId` query param as `z.string().uuid()` | `tests/lib/validation/steps.test.ts`, `tests/lib/validation/assessment.test.ts`, `tests/lib/api/parse-body.test.ts`, `tests/lib/payment-webhook.test.ts` |
 | Per-step bounded enums + numeric ranges | `lib/validation/steps.ts` | `tests/lib/validation/steps.test.ts` |
 | Cross-field coherence (weight × main_goal) | `lib/health/coherence.ts`, `lib/assessment.ts` | `tests/lib/validation/assessment.test.ts`, `tests/lib/assessment.test.ts` |
 | First-incomplete-step rule (ADR-008) | `lib/progress.ts`, `lib/assessment.ts:firstMissingPrereq` | `tests/lib/progress.test.ts`, `tests/lib/assessment.test.ts` |
@@ -166,7 +166,7 @@ Reproducer: `npm audit --omit=dev` → "found 0 vulnerabilities".
 
 Best-effort, **Postgres-backed** fixed-window limiter on the hot write
 routes — `POST /api/v1/sessions`, step `PATCH`, `POST /submit`,
-`POST /payments/checkout`, `POST /payments/webhook`
+`POST /pay`, `POST /payments/checkout`, `POST /payments/webhook`
 (`lib/api/rate-limit.ts`). Read routes and `/healthz` are not limited.
 
 | Property | Choice | Why |
@@ -176,7 +176,7 @@ routes — `POST /api/v1/sessions`, step `PATCH`, `POST /submit`,
 | Algorithm | Fixed window, `count` via Prisma upsert+increment | Simple + atomic-enough; a tiny under-count race under heavy concurrency is acceptable for a throttle. |
 | On store error | **Fail-open** (allow) | A limiter outage must never break the demo loop. |
 | Breach response | `429 RATE_LIMITED` + `Retry-After` | `ERROR_CODES.RATE_LIMITED` (previously reserved). |
-| Limits (per 60s/identity) | sessions 20, steps 80, submit 15, checkout 20, webhook 30 | Generous for the 6-step browser flow + edits + README cURL walkthrough; tight enough to throttle scripted abuse. |
+| Limits (per 60s/identity) | sessions 20, steps 80, submit 15, pay 15, checkout 20, webhook 30 | Generous for the 6-step browser flow + edits + README cURL walkthrough; tight enough to throttle scripted abuse. |
 | Cleanup | opportunistic prune of expired rows (~2% of calls) | Bounds table growth without a cron; `expires_at` is indexed for a scheduled sweep if desired. |
 
 Honest scope: this bounds a single IP/UA/cookie identity per window. A
@@ -189,34 +189,50 @@ helpers + an in-memory `RateLimitStore`: under-limit pass, over-limit
 429 + `Retry-After`, fail-open on store error, window rollover reset,
 per-identity isolation).
 
-## 3.6 Payment trust boundary — signature-verified webhook (ADR-017)
+## 3.6 Payment trust boundary — mock `/pay` vs signature-verified webhook (ADR-017/018)
 
-Entitlement is granted **only** by a payment-provider webhook whose
-signature the server verifies — never directly from a browser-callable
-endpoint. The provider is *simulated* (no real Stripe), but the
-boundary, signature verification, and order checks are real.
+There are **two** grant entry points over one transactional primitive
+(`lib/payment.ts:processPayment`), and the distinction is the security
+story worth being explicit about:
 
 | Stage | Endpoint | Can grant? | Control |
 | - | - | - | - |
+| Brief's mock callback | `POST /api/v1/pay` (ADR-018) | **Yes (mock)** | Cookie + same-origin + rate-limited + `Idempotency-Key`. Secret-free, directly callable — the brief's "模拟支付回调". This is **not** the production trust boundary; it is the reproducible mock the brief requires. A same-origin browser request can reach it, which is exactly why it is labelled a mock and the webhook below exists. |
 | Merchant checkout | `POST /api/v1/payments/checkout` | **No** | Cookie + same-origin + rate-limited; returns the order descriptor only, no DB write. |
-| Provider callback | `POST /api/v1/payments/webhook` | **Yes (only)** | No cookie/origin; auth is `X-Payment-Signature` = HMAC-SHA256(raw body, `PAYMENT_WEBHOOK_SECRET`), verified constant-time. Then re-checks `amountCents`/`currency`/`status` against the server price constants before delegating to the unchanged `processPayment` (DB idempotency). |
+| Provider callback | `POST /api/v1/payments/webhook` (ADR-017) | **Yes (production)** | No cookie/origin; auth is `X-Payment-Signature` = HMAC-SHA256(raw body, `PAYMENT_WEBHOOK_SECRET`), verified constant-time. Then re-checks `amountCents`/`currency`/`status` against the server price constants before delegating to the unchanged `processPayment` (DB idempotency). The browser UI drives this path. |
 
-Why this is safe: the signing secret lives server-side only (the
-`/checkout` mock-provider page's `confirmMockPayment` server action, and
-in production the real provider). The browser cannot forge a signature,
-so it cannot mint `paid`. A validly-signed but tampered amount/currency
-is rejected by the order re-check.
+What the **production** boundary buys (the webhook): the signing secret
+lives server-side only (the `/checkout` mock-provider page's
+`confirmMockPayment` server action, and in production the real provider).
+The browser cannot forge a signature, so on that path it cannot mint
+`paid`. A validly-signed but tampered amount/currency is rejected by the
+order re-check. The mock `/pay` is provided for brief-compliance and the
+secret-free reviewer cURL; in a real deployment you would gate it behind
+the same provider signature (or remove it), which is precisely what the
+webhook demonstrates. Both paths share the DB-enforced
+`UNIQUE (session_id, idempotency_key)` + the partial unique
+`one succeeded payment per session`, so neither can double-charge.
 
 Reproducer (falsifiable):
+- `POST /api/v1/pay` with a cookie + `Idempotency-Key` → `200`,
+  entitlement flips to `paid`; replay with the same key → same row
+  (README §Paid test session, secret-free path).
 - Sign a payload and POST the webhook → `200`, entitlement flips to
-  `paid` (README §Paid test session).
-- POST the same payload with a wrong/absent `X-Payment-Signature` →
-  `401 INVALID_SIGNATURE`, **no** grant.
+  `paid`. POST the same payload with a wrong/absent `X-Payment-Signature`
+  → `401 INVALID_SIGNATURE`, **no** grant.
 
 Tests: `tests/lib/payment-webhook.test.ts` (sign/verify roundtrip,
 tamper/wrong-secret/missing/length-mismatch rejects, `.strict` schema,
-amount/currency/status validation). `processPayment` idempotency tests
-in `tests/lib/payment.test.ts` are unchanged.
+amount/currency/status validation). `processPayment` idempotency tests in
+`tests/lib/payment.test.ts` cover **both** entry points (the grant
+primitive is shared and unchanged).
+
+Demo read (`GET /api/v1/results/by-session`, ADR-018): an unauthenticated,
+read-only convenience for brief §五-1c. It returns nothing `/results/me`
+doesn't (the same leak-tested teaser/full serializers), and sessionIds
+are unguessable random UUIDs — so it is not a meaningful enumeration
+surface for a $0 demo. The cookie remains the real auth credential for
+every *mutating* and primary read path.
 
 ## 4. Day-5 / post-MVP additions changelog
 
@@ -240,10 +256,15 @@ in `tests/lib/payment.test.ts` are unchanged.
   fixed-window limiter on `/sessions`, step PATCH, `/submit`,
   `payments/checkout`, `payments/webhook` (§3.5). Reverses the earlier
   "rate limiting deferred" non-goal.
-- **Payment-webhook branch (ADR-017)** — entitlement now grants only via
-  a signature-verified webhook (§3.6); browser checkout can't mint
-  `paid`. `POST /api/v1/pay` removed; `payments/checkout` +
-  `payments/webhook` added.
+- **Payment-webhook branch (ADR-017)** — added the production trust
+  boundary: a signature-verified webhook (§3.6); browser checkout can't
+  mint `paid`. `payments/checkout` + `payments/webhook` added.
+- **Brief-compliance branch (ADR-018)** — restored the brief's mock
+  `POST /api/v1/pay` (secret-free, same-origin + cookie, the
+  directly-callable callback the brief names) alongside the webhook, and
+  added the read-only demo endpoint `GET /api/v1/results/by-session` +
+  `npm run seed:demo` so a judge gets a paid test sessionId (§五-1c).
+  Both grant paths share the unchanged `processPayment` (§3.6).
 
 ## 5. Intentionally out of scope
 
@@ -260,11 +281,14 @@ later, they are documented elsewhere as known follow-ups.
   scored "支付回调闭环" criterion lands on the design, not on a real
   Stripe integration (ADR-006).
 
-  **Mock-payment trust boundary** — **now implemented as a simulated
-  signed webhook** (ADR-017, §3.6). Entitlement is granted only by
-  `POST /api/v1/payments/webhook` after the server verifies an
-  HMAC-SHA256 signature + amount/currency/status; the browser
-  `POST /api/v1/payments/checkout` cannot grant. Still out of scope: a
+  **Mock-payment trust boundary** — the *production* boundary is
+  **implemented as a simulated signed webhook** (ADR-017, §3.6):
+  `POST /api/v1/payments/webhook` grants only after the server verifies an
+  HMAC-SHA256 signature + amount/currency/status, and the browser
+  `POST /api/v1/payments/checkout` cannot grant. The brief also requires a
+  directly-callable `/pay`, restored as a secret-free same-origin **mock**
+  (ADR-018, §3.6) over the same `processPayment`; in a real deployment it
+  would sit behind the same provider signature. Still out of scope: a
   *real* provider SDK (Stripe Checkout + `stripe.webhooks.constructEvent`),
   card capture, refunds, and recurring subscription lifecycle. Swapping
   the simulated provider for the real one replaces the mock-provider page
@@ -272,7 +296,7 @@ later, they are documented elsewhere as known follow-ups.
   `processPayment` shape stays.
 - **Rate limiting** — **now implemented** (ADR-016, §3.5): a
   Postgres-backed best-effort fixed-window limiter on `/sessions`, step
-  PATCH, `/submit`, `payments/checkout`, and `payments/webhook`. Still
+  PATCH, `/submit`, `pay`, `payments/checkout`, and `payments/webhook`. Still
   out of scope: a dedicated
   distributed store (Upstash / Vercel KV) for hard global guarantees
   under large-scale abuse — the higher-throughput prod path, not needed

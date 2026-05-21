@@ -113,13 +113,13 @@ All errors share one envelope, regardless of status code:
 | 403 | `FORBIDDEN_ORIGIN` | `Origin` header present and does not match the receiving host. Sent only when `Origin` is set (cURL / server-internal fetch are unaffected). See `docs/08-security-hardening.md` §2. |
 | 404 | `NOT_FOUND` | Resource id is well-formed but does not exist. |
 | 409 | `STEP_OUT_OF_ORDER` | Step save would skip a required earlier step. |
-| 401 | `INVALID_SIGNATURE` | `POST /api/v1/payments/webhook` received a missing or invalid `X-Payment-Signature`. The webhook is the only grant path; an unsigned/forged call cannot mint `paid` (ADR-017). |
-| 409 | `NOT_SUBMITTED` | Result or checkout requested before `/submit`. Used by `GET /api/v1/results/me` and `POST /api/v1/payments/checkout`. |
+| 401 | `INVALID_SIGNATURE` | `POST /api/v1/payments/webhook` received a missing or invalid `X-Payment-Signature`. The webhook is the production grant path; an unsigned/forged call cannot mint `paid` (ADR-017). |
+| 409 | `NOT_SUBMITTED` | Result, checkout, or payment requested before `/submit`. Used by `GET /api/v1/results/me`, `GET /api/v1/results/by-session`, `POST /api/v1/payments/checkout`, and `POST /api/v1/pay`. |
 | 409 | `ALREADY_SUBMITTED` | `/submit` called again with different inputs (we still return 200 with the existing result for identical replays — see `/submit`). |
 | 413 | `PAYLOAD_TOO_LARGE` | Request body exceeded the `MAX_BODY_BYTES` (16 KB) cap. Largest legitimate body in the funnel is well under 1 KB; see `lib/api/parse-body.ts` and `docs/08-security-hardening.md` §3.2. |
 | 422 | `VALIDATION_ERROR` | Zod validation failed on body or step. |
 | 422 | `INCOMPLETE_ASSESSMENT` | `/submit` called while required answers are missing. |
-| 429 | `RATE_LIMITED` | Best-effort fixed-window rate limit exceeded on a write route (`POST /sessions`, step `PATCH`, `/submit`, `payments/checkout`, `payments/webhook`). Carries a `Retry-After` header. See `docs/08-security-hardening.md` §3.5 and ADR-016. |
+| 429 | `RATE_LIMITED` | Best-effort fixed-window rate limit exceeded on a write route (`POST /sessions`, step `PATCH`, `/submit`, `pay`, `payments/checkout`, `payments/webhook`). Carries a `Retry-After` header. See `docs/08-security-hardening.md` §3.5 and ADR-016. |
 | 500 | `INTERNAL_ERROR` | Unhandled server failure. Logged with `requestId`. |
 
 ---
@@ -355,6 +355,24 @@ All errors share one envelope, regardless of status code:
 
 ---
 
+### 5b. Get result by sessionId (demo read)
+
+`GET /api/v1/results/by-session?sessionId=<uuid>`
+
+- **Auth**: none — a deliberately-scoped **demo/reviewer aid** (ADR-018)
+  for brief §五-1c ("提供一个已支付的测试 sessionId … 直接对比付费前后的差异化返回").
+- **Behaviour**: identical to §5 — same leak-tested `serializeTeaser` /
+  `serializeFull`, branching on `entitlement_status`. Read-only; no grant.
+- **Why it's safe to expose**: returns nothing `/results/me` doesn't;
+  ids are unguessable random UUIDs (`crypto.randomUUID()`); read-only.
+  The cookie remains the real auth credential — this endpoint is a
+  labelled demo convenience so judges can diff a paid vs free id without
+  a cookie jar.
+- **400 BAD_REQUEST** (sessionId not a UUID) / **404 NOT_FOUND** (no such
+  session) / **409 NOT_SUBMITTED** (not yet submitted).
+
+---
+
 ### 6. Mock payment (browser routes)
 
 `GET /pay` — the upsell page. Cookie required (redirect to `/` if
@@ -368,9 +386,18 @@ here runs a server action that signs a `checkout.completed` event with
 `PAYMENT_WEBHOOK_SECRET` and posts it to the webhook below — the only
 path that grants. The browser never holds the signing secret.
 
-Payment trust boundary (ADR-017): entitlement is granted **only** by a
-signature-verified provider webhook, never directly from a
-browser-callable endpoint.
+Two grant entry points share one transactional primitive
+(`lib/payment.ts:processPayment`), differing only in auth and intended
+caller:
+
+- **`POST /api/v1/pay`** (§7c) — the brief's directly-callable **mock
+  callback** (ADR-018): same-origin + cookie + `Idempotency-Key`,
+  secret-free, for the replayable cURL judges run. The brief literally
+  asks for `/pay` to flip membership.
+- **`POST /api/v1/payments/webhook`** (§7b) — the **production trust
+  boundary** (ADR-017): the browser UI flows through this, and it is the
+  only path where the grant is gated on a provider signature, not on a
+  same-origin browser request. This is what a real integration would use.
 
 ---
 
@@ -387,7 +414,7 @@ browser-callable endpoint.
 - **401 NO_SESSION** / **403 FORBIDDEN_ORIGIN** / **409 NOT_SUBMITTED** /
   **429 RATE_LIMITED** as applicable.
 
-### 7b. Payment provider webhook (API) — the only grant path
+### 7b. Payment provider webhook (API) — the production grant path
 
 `POST /api/v1/payments/webhook`
 
@@ -410,6 +437,27 @@ browser-callable endpoint.
 - **400 BAD_REQUEST** (non-JSON) / **413 PAYLOAD_TOO_LARGE** /
   **422 VALIDATION_ERROR** (schema or amount/currency/status mismatch) /
   **429 RATE_LIMITED**.
+
+### 7c. Mock payment callback (API) — the brief's `/pay`
+
+`POST /api/v1/pay`
+
+- **Auth**: cookie required; same-origin guarded; rate-limited (`pay`).
+- **Required header**: `Idempotency-Key: <printable-ascii, 1–128>`
+  (`IDEMPOTENCY_KEY_SCHEMA`); missing/invalid → `400 BAD_REQUEST`.
+- **Body**: `{}` (`.strict`).
+- **Behaviour**: the brief's "模拟支付回调" — gates on `submitted`, then
+  delegates to the **same** `processPayment` transaction as the webhook
+  (`SELECT … FOR UPDATE`, insert `payment` `ON CONFLICT DO NOTHING`, flip
+  `entitlement_status='paid'`). Secret-free so the README cURL is
+  replayable by a reviewer who does not hold `PAYMENT_WEBHOOK_SECRET`.
+- **Replay / idempotency** (ADR-006/012): same `Idempotency-Key` → same
+  `payment` row; a new key against an already-paid session → no-op.
+- **200 OK**: `{ "paymentId": "<uuid>", "sessionId": "1a2b…", "status": "succeeded", "amountCents": 999, "currency": "USD", "entitlementStatus": "paid", "paidAt": "2026-05-21T09:37:00.000Z" }`
+- **401 NO_SESSION** / **403 FORBIDDEN_ORIGIN** / **409 NOT_SUBMITTED** /
+  **429 RATE_LIMITED** as applicable.
+- **Note**: this is the brief-mandated mock, not the production trust
+  boundary — see §7b and `docs/08-security-hardening.md` §3.6.
 
 ---
 
