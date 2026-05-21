@@ -5,14 +5,17 @@
 > 2026-05-19 (ADR-009 Accepted-and-shipped, ADR-014 server-side cookie
 > TTL). Changes from v1: payment surface aligned to `/pay`; subscription
 > model collapsed into `session`; step-progress rule fixed to
-> first-incomplete-step; pre-seeded paid sessionId dropped in favour of a
-> cookie-jar cURL demo; `step_event` shipped Day 5 as minimal append-only
+> first-incomplete-step; `step_event` shipped Day 5 as minimal append-only
 > audit (T-502); cookie payload extended with `iat` for server-side TTL
-> (T-501, ADR-014).
+> (T-501, ADR-014). Later: the payment grant moved behind a
+> signature-verified webhook (ADR-017) and the brief's mock `POST /api/v1/pay`
+> was restored beside it (ADR-018); a paid test sessionId is now provided
+> via `npm run seed:demo` + the demo-scoped `GET /results/by-session`
+> (ADR-018/019), superseding the earlier "no pre-seeded paid sessionId".
 >
-> **Decision gate**: ADR-001…017 in `memory/decisions.md` are Accepted.
+> **Decision gate**: ADR-001…019 in `memory/decisions.md` are Accepted.
 
-## 0. Accepted decisions (ADR-001…017)
+## 0. Accepted decisions (ADR-001…019)
 
 The accepted decisions that frame this architecture live in
 `memory/decisions.md`. Short index — see ADR bodies for context,
@@ -316,7 +319,7 @@ Each day ends at a Codex review trigger so quality is loaded throughout, not bol
 | R5 | Cookie identity = single device only; evaluator tries two browsers, gets confused | Low | Med | Documented limitation in README and §9. |
 | R6 | Vercel cold start makes first click feel broken | Low | Low | README tells the evaluator to hit `/healthz` first. |
 | R7 | Free-result endpoint leaks paid fields | Low | High | Two-serializer design + leak test in CI. |
-| R8 | Implementation starts before accepted ADRs are recorded → rework | Low | High | ADR-001…017 are accepted; future scope changes require new ADRs. |
+| R8 | Implementation starts before accepted ADRs are recorded → rework | Low | High | ADR-001…019 are accepted; future scope changes require new ADRs. |
 
 ---
 
