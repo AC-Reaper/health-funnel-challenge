@@ -2,7 +2,7 @@
 
 > Status: **Current** — Claude 2026-05-18, last updated 2026-05-19
 > against `feature/day5-hardening` after review-004-final I002. Mirrors
-> `docs/02-architecture.md` v2 + ADR-001…017. The eight routes below
+> `docs/02-architecture.md` v2 + ADR-001…019. The ten routes below
 > are all implemented, smoked, and reviewed; review-001/002/003/006/007
 > are Resolved. The auth section reflects ADR-014's server-side cookie
 > TTL.
@@ -53,7 +53,8 @@
   demo.
 - **Same-origin guard** (`lib/api/same-origin.ts`): every browser-facing
   mutating route (POST /sessions, PATCH /steps/:stepKey, POST /submit,
-  POST /payments/checkout) runs `checkSameOrigin` before any cookie read.
+  POST /pay, POST /payments/checkout) runs `checkSameOrigin` before any
+  cookie read.
   (`POST /api/v1/payments/webhook` is **not** same-origin guarded — a
   real provider calls cross-origin; its auth is the HMAC signature,
   §7b.) If the request carries an
@@ -359,17 +360,20 @@ All errors share one envelope, regardless of status code:
 
 `GET /api/v1/results/by-session?sessionId=<uuid>`
 
-- **Auth**: none — a deliberately-scoped **demo/reviewer aid** (ADR-018)
-  for brief §五-1c ("提供一个已支付的测试 sessionId … 直接对比付费前后的差异化返回").
+- **Auth**: none, but **scoped to demo-seeded sessions** (ADR-018/019) —
+  a deliberately-narrow reviewer aid for brief §五-1c ("提供一个已支付的测试
+  sessionId … 直接对比付费前后的差异化返回").
 - **Behaviour**: identical to §5 — same leak-tested `serializeTeaser` /
   `serializeFull`, branching on `entitlement_status`. Read-only; no grant.
-- **Why it's safe to expose**: returns nothing `/results/me` doesn't;
-  ids are unguessable random UUIDs (`crypto.randomUUID()`); read-only.
-  The cookie remains the real auth credential — this endpoint is a
-  labelled demo convenience so judges can diff a paid vs free id without
-  a cookie jar.
+- **Scope guard**: only sessions created by `npm run seed:demo` are
+  readable — those carry a marker `user_agent`
+  (`isDemoSeedSession`, `lib/session.ts`). Any other session id (a real
+  visitor's) returns **404**, collapsed with the not-found case so the
+  endpoint never confirms a real session exists. So a leaked/guessed UUID
+  is not bearer read-access to anyone's data; the cookie remains the real
+  auth credential for normal paths.
 - **400 BAD_REQUEST** (sessionId not a UUID) / **404 NOT_FOUND** (no such
-  session) / **409 NOT_SUBMITTED** (not yet submitted).
+  *demo* session) / **409 NOT_SUBMITTED** (not yet submitted).
 
 ---
 

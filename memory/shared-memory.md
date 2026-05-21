@@ -4,7 +4,7 @@
 
 Health quiz funnel full-stack challenge for Ruiqi Technology (睿迄科技).
 5-day delivery. MVP is merged to `main`; post-MVP security hardening is
-review-resolved on `feature/security-hardening` at `bcb4f2a`. ADR-001…017
+review-resolved on `feature/security-hardening` at `bcb4f2a`. ADR-001…019
 are Accepted.
 
 ## Final Goal
@@ -103,10 +103,10 @@ that the browser UI drives.
 - Browser pages → `app/page.tsx`, `app/funnel/**`, `app/pay/{page,PayButton}.tsx`, `app/checkout/{page,ConfirmButton,actions}.ts(x)` (mock provider), `app/results/page.tsx`
 - Step audit → `step_event` model + `20260519000000_add_step_event`
   migration (ADR-009 accepted on Day 5)
-- Test suite → `tests/**` (vitest, 251 tests on `feature/payment-webhook`)
-- ADR log → `memory/decisions.md` (ADR-001…018 Accepted)
+- Test suite → `tests/**` (vitest, 255 tests on `feature/brief-compliance-pay`)
+- ADR log → `memory/decisions.md` (ADR-001…019 Accepted)
 - Open questions → `memory/open-questions.md` (no open blocker)
-- Latest reviews → `reviews/review-015-payment-webhook.md` (Resolved at `a220c6b`); `reviews/review-014-rate-limit.md` (Resolved, merged to `main` @ `ffdab50`); `reviews/review-013-landing-cta.md` (Resolved, merged); `reviews/review-012-security-polish.md` (Resolved, merged); earlier reviews are resolved for their branches.
+- Latest reviews → `reviews/review-016-brief-compliance-pay.md` (Resolved after I001/I002/N001 fixes; awaiting Codex re-review before merge); `reviews/review-015-payment-webhook.md` (Resolved at `a220c6b`, merged to `main` @ `10b1dc3`); `reviews/review-014-rate-limit.md` (Resolved, merged to `main` @ `ffdab50`); earlier reviews are resolved for their branches.
 
 ## Current Branch
 
@@ -126,11 +126,24 @@ webhook:
   with secret-free `/pay` + by-session, webhook kept as bonus); docs/02/03/
   04/07/08 + PROJECT_BRIEF reconciled (two grant paths; ADR-010/017
   superseded-in-part). No schema/migration change; `lib/payment.ts`
-  untouched; 251 tests unchanged.
+  untouched.
 
-Gates: `tsc` clean, `npm test` 251 green, `next build` clean (both `/pay`
-and `results/by-session` in the route manifest). **Re-review gated**
-(touches the grant path) before merge to `main`.
+**review-016 fixes (ADR-019)** — all on-branch:
+- I002: `GET /results/by-session` scoped to demo-seeded sessions via a
+  marker User-Agent (`DEMO_SEED_USER_AGENT` + pure `isDemoSeedSession` in
+  `lib/session.ts`; seed sends it on session create). A real session id →
+  404 (collapsed with not-found). Pure predicate unit-tested (251 → 255).
+- N001: `seed:demo` self-verifies paid→full / free→teaser (fail-fast) and
+  prints `paymentId` / `entitlementStatus`.
+- I001: purged remaining webhook-only claims from current docs
+  (README/docs/01/04/08 + the webhook route header comment) → two-path
+  truth; counts refreshed (255 tests, 10 routes, review log through 016).
+
+Gates: `tsc` clean, `npm test` 255 green, `next build` clean (both `/pay`
+and `results/by-session` in the route manifest), `db:validate` clean,
+diff-check clean, raw-query grep still only `lib/payment.ts:200`. Live
+seed/by-session smoke pass (non-seeded id → 404). Awaiting Codex
+re-review before merge (still touches the grant/read-by-id surface).
 
 ### Prior branch (merged)
 

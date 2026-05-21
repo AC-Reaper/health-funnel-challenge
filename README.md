@@ -46,7 +46,7 @@ See `PROJECT_BRIEF.md` for the scoring criteria and MVP boundary, and
 | Payment | Two paths sharing one grant primitive: the brief's secret-free mock `POST /api/v1/pay` (ADR-018), **and** a production-grade **signature-verified webhook** (ADR-017) the browser UI drives (checkout → mock provider → HMAC-signed `payments/webhook`) | Brief asks for a directly-callable `/pay` *and* a replayable cURL; both replay-safe by DB unique constraint. The webhook shows the production boundary (browser cannot mint `paid` — only a signed callback can) without a real Stripe dependency. See `docs/08-security-hardening.md` §3.6. |
 | Hosting | Vercel (app) + Supabase (DB) | Free tier; public HTTPS URL out of the box; no VPS required. |
 
-Full decision history lives in `memory/decisions.md` (ADR-001…018).
+Full decision history lives in `memory/decisions.md` (ADR-001…019).
 
 ## Status
 
@@ -55,10 +55,10 @@ passes. Full funnel loop runs end-to-end against Supabase: anonymous
 session → 6-step browser quiz → submit → calculator → gated teaser →
 checkout → signature-verified webhook → full result; plus the brief's
 secret-free mock `/pay` callback (ADR-018) for a replayable, no-secret
-reproducer. 251 unit tests
+reproducer. 255 unit tests
 green; live cookie-jar smoke covers happy + sad paths for every
 endpoint; the Codex review log (`docs/06-review-log.md`) is current
-through `review-013`, all Resolved; `npm audit --omit=dev` clean
+through `review-016`, all Resolved; `npm audit --omit=dev` clean
 (Next.js 15.5.18 + pinned `postcss` override). Production-hardening pass
 adds baseline security response headers (XCTO / XFO / Referrer-Policy /
 Permissions-Policy / CSP frame-ancestors), `Cache-Control: private,
@@ -66,9 +66,10 @@ no-store` on every personalised + error response, a 16 KB body-size
 cap (`413 PAYLOAD_TOO_LARGE`), 512-char `User-Agent` truncation, an
 optional `APP_ORIGIN` allowlist for `internalUrl()`, a
 Postgres-backed best-effort rate limiter on the hot write routes
-(`429 RATE_LIMITED` + `Retry-After`, ADR-016), and a payment trust
-boundary where entitlement is granted only by a signature-verified
-webhook — the browser checkout cannot mint `paid` (ADR-017) —
+(`429 RATE_LIMITED` + `Retry-After`, ADR-016), and a two-path payment
+model — the brief's secret-free mock `POST /api/v1/pay` (ADR-018) plus a
+production-style signature-verified webhook the browser checkout cannot
+bypass to mint `paid` (ADR-017) —
 `docs/08-security-hardening.md` §3.1–§3.6 has the falsifiable
 table.
 
@@ -131,7 +132,8 @@ npm run dev   # http://localhost:3000
 | `npm run build` | `prisma generate` + `next build` (used on Vercel) |
 | `npm run start` | Production server (after `npm run build`) |
 | `npm run typecheck` | `tsc --noEmit` |
-| `npm test` | Vitest, 250 unit tests |
+| `npm test` | Vitest, 255 unit tests |
+| `npm run seed:demo` | Seed a paid + free demo session against `$BASE`; prints both sessionIds |
 | `npm run db:deploy` | `prisma migrate deploy` against `DIRECT_URL` |
 
 Node 20 LTS is pinned via `.nvmrc`.
@@ -257,7 +259,10 @@ BASE="https://project-u415a.vercel.app" npm run seed:demo
 `GET /api/v1/results/by-session?sessionId=<id>` is a **demo-only** read
 (no cookie, no secret) that returns the *same* leak-tested serializers as
 `/results/me` — `kind:"full"` for the paid id, `kind:"teaser"` for the
-free one — so a reviewer can diff them directly:
+free one — so a reviewer can diff them directly. It only reads
+**seeded demo sessions** (ADR-019): a real visitor's session id returns
+404, so this is not a back door into anyone's data — the cookie stays the
+real credential.
 
 ```bash
 curl -sS "$BASE/api/v1/results/by-session?sessionId=<PAID>" | jq '.kind'   # "full"
@@ -347,9 +352,10 @@ curl -sS "$BASE/api/v1/sessions/me"   # no -b "$JAR"
 
 `GET /results/by-session` is the one endpoint that accepts a bare
 `sessionId` — a deliberately-scoped, read-only **demo aid** for §五-1c. It
-exposes nothing `/results/me` doesn't (same serializers), and ids are
-unguessable random UUIDs, so it is not a meaningful enumeration surface
-for a $0 demo.
+exposes nothing `/results/me` doesn't (same serializers), and it only
+reads **demo-seeded sessions** (those created by `seed:demo` with a marker
+User-Agent, ADR-019): a real visitor's session id returns 404, so a
+leaked/guessed UUID is not bearer read-access to their data.
 
 See [`docs/04-api-design.md`](docs/04-api-design.md) §Authentication
 and [`docs/08-security-hardening.md`](docs/08-security-hardening.md) §2
@@ -416,8 +422,8 @@ sessionId，复制 README §Paid test session 的 cURL 段落即可
 • Next.js 15 App Router + TypeScript + Zod + Prisma + Postgres
   (Supabase) + Vercel.
 • 匿名 session、HMAC-signed httpOnly cookie、server-side TTL。
-• 7 个 /api/v1 路由，全部 Zod 校验。
-• 250 个 vitest 单元；Codex 评审记录截至 review-013 全部 Resolved；`npm audit --omit=dev` 干净。
+• 10 个 /api/v1 路由，全部 Zod 校验。
+• 255 个 vitest 单元；Codex 评审记录截至 review-016 全部 Resolved；`npm audit --omit=dev` 干净。
 • 评审记录: docs/06-review-log.md。
 
 期待反馈。

@@ -488,3 +488,41 @@ Consequences:
 - Owner: run `BASE=<live-url> npm run seed:demo` once to mint the paid
   sessionId for the submission; `PAYMENT_WEBHOOK_SECRET` is still needed
   on Vercel for the *webhook* bonus only.
+
+## ADR-019: `GET /results/by-session` scoped to demo-seeded sessions
+
+Status: Accepted (2026-05-21, `feature/brief-compliance-pay`, review-016 I002)
+
+Refines ADR-018 (which introduced the unauthenticated demo read).
+
+Context:
+Codex review-016 I002 flagged that `GET /api/v1/results/by-session` as first
+shipped would return *any* submitted session's teaser/full result by bare
+UUID. UUIDs aren't guessable, but a leaked id (logs, screenshots, copied
+docs) would become bearer read-access to a real visitor's health data, and
+it contradicted the repo's "the signed cookie is the real credential" story.
+
+Decision:
+Scope the demo read to **demo-seeded sessions only**, reusing the
+already-persisted `session.user_agent` (set once at create-time) as the
+marker:
+- `lib/session.ts` exports `DEMO_SEED_USER_AGENT = "health-funnel-demo-seed/1.0"`
+  and a pure `isDemoSeedSession(ua)` (exact match), unit-tested in
+  `tests/lib/session.test.ts`.
+- `scripts/seed-demo.sh` sends `User-Agent: health-funnel-demo-seed/1.0` on
+  the `POST /api/v1/sessions` create call (the only call whose UA is stored).
+- The route returns `404 NOT_FOUND` when the session is null **or** not a
+  demo-seed session — collapsed into one branch so it never confirms a real
+  session's existence.
+
+Reason:
+- Closes the read-by-id surface to deliberately-seeded rows while still
+  meeting brief §五-1c (a paid test sessionId a judge can diff). Lowest-risk
+  fix: no schema change, reuses an existing column, adds a pure tested
+  predicate. A user could only "spoof" the marker for their *own* session,
+  which they could already read via cookie — no new exposure.
+
+Consequences:
+- `seed:demo` now also self-verifies the paid→full / free→teaser contrast
+  (fail-fast) and prints `paymentId` / `entitlementStatus` (review-016 N001).
+- Docs (README, docs/01/04/08) state the read is demo-seeded-only.

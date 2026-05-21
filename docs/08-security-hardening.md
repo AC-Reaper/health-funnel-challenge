@@ -227,12 +227,17 @@ amount/currency/status validation). `processPayment` idempotency tests in
 `tests/lib/payment.test.ts` cover **both** entry points (the grant
 primitive is shared and unchanged).
 
-Demo read (`GET /api/v1/results/by-session`, ADR-018): an unauthenticated,
-read-only convenience for brief §五-1c. It returns nothing `/results/me`
-doesn't (the same leak-tested teaser/full serializers), and sessionIds
-are unguessable random UUIDs — so it is not a meaningful enumeration
-surface for a $0 demo. The cookie remains the real auth credential for
-every *mutating* and primary read path.
+Demo read (`GET /api/v1/results/by-session`, ADR-018/019): a read-only
+reviewer convenience for brief §五-1c, **scoped to demo-seeded sessions
+only**. It returns nothing `/results/me` doesn't (the same leak-tested
+teaser/full serializers), and — crucially — it only serves sessions whose
+stored `user_agent` is the marker that `scripts/seed-demo.sh` sends
+(`isDemoSeedSession`, `lib/session.ts`). A real visitor's session id —
+even if leaked through logs/screenshots or guessed — returns **404**
+(collapsed with the not-found case, so existence isn't confirmed). So this
+is **not** bearer read-access to arbitrary health data; the signed cookie
+remains the real credential for every mutating and primary read path. The
+gating predicate is unit-tested in `tests/lib/session.test.ts`.
 
 ## 4. Day-5 / post-MVP additions changelog
 
