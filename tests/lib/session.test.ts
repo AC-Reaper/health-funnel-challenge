@@ -1,6 +1,12 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import { COOKIE_MAX_AGE_SECONDS, signCookie, verifyCookie } from "@/lib/session";
+import {
+  COOKIE_MAX_AGE_SECONDS,
+  DEMO_SEED_USER_AGENT,
+  isDemoSeedSession,
+  signCookie,
+  verifyCookie,
+} from "@/lib/session";
 
 const VALID_SID = "f8fd9992-7ea9-44d9-ac89-e04e14eaf314";
 
@@ -138,5 +144,29 @@ describe("verifyCookie TTL (T-501 expired-cookie hardening)", () => {
     const decoded = decodeCookie(cookie);
     decoded.iat = decoded.iat - 10; // signed value differs; sig no longer valid
     expect(verifyCookie(encodeCookie(decoded))).toBeNull();
+  });
+});
+
+describe("isDemoSeedSession (ADR-019 by-session demo scoping)", () => {
+  it("accepts the exact demo seed marker User-Agent", () => {
+    expect(isDemoSeedSession(DEMO_SEED_USER_AGENT)).toBe(true);
+  });
+
+  it("rejects a null User-Agent (real cookie-jar cURL with no UA)", () => {
+    expect(isDemoSeedSession(null)).toBe(false);
+  });
+
+  it("rejects a normal browser User-Agent", () => {
+    expect(
+      isDemoSeedSession(
+        "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36",
+      ),
+    ).toBe(false);
+  });
+
+  it("rejects a near-miss marker (no partial / prefix match)", () => {
+    expect(isDemoSeedSession("health-funnel-demo-seed/1.0 extra")).toBe(false);
+    expect(isDemoSeedSession("health-funnel-demo-seed")).toBe(false);
+    expect(isDemoSeedSession("")).toBe(false);
   });
 });

@@ -17,12 +17,16 @@ import { findSessionById } from "@/lib/session";
 export const dynamic = "force-dynamic";
 
 /**
- * Simulated payment-provider webhook (ADR-017). This is the ONLY path
- * that grants entitlement. There is no cookie and no same-origin check —
- * a real provider calls cross-origin — so the auth is the HMAC
- * signature over the raw body (`X-Payment-Signature`). After the
- * signature and the amount/currency/status checks pass, it delegates to
- * the unchanged `processPayment` (DB-enforced idempotency, ADR-006/012).
+ * Simulated payment-provider webhook (ADR-017). This is the
+ * **production** grant path: the browser UI drives it, and entitlement is
+ * gated on a provider signature, not on a same-origin browser request.
+ * (The brief's mock `POST /api/v1/pay` (ADR-018) is a parallel,
+ * secret-free grant for the reviewer cURL; both share `processPayment`.)
+ * There is no cookie and no same-origin check — a real provider calls
+ * cross-origin — so the auth is the HMAC signature over the raw body
+ * (`X-Payment-Signature`). After the signature and the
+ * amount/currency/status checks pass, it delegates to the unchanged
+ * `processPayment` (DB-enforced idempotency, ADR-006/012).
  */
 export async function POST(req: Request) {
   const requestId = getRequestId(req);

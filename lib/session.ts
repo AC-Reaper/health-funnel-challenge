@@ -123,6 +123,21 @@ export function truncateUserAgent(
   return ua.slice(0, USER_AGENT_MAX_LENGTH);
 }
 
+/**
+ * Marker User-Agent that `scripts/seed-demo.sh` sends when creating the
+ * demo sessions (ADR-019). The read-only demo endpoint
+ * `GET /api/v1/results/by-session` only returns sessions whose stored
+ * `user_agent` equals this — so a leaked/guessed UUID of a *real* visitor's
+ * session cannot be read by id; the signed cookie stays the real credential
+ * for every normal path. Keep this string in sync with `scripts/seed-demo.sh`.
+ */
+export const DEMO_SEED_USER_AGENT = "health-funnel-demo-seed/1.0";
+
+/** True only for sessions created by the demo seed (exact UA match). */
+export function isDemoSeedSession(userAgent: string | null): boolean {
+  return userAgent === DEMO_SEED_USER_AGENT;
+}
+
 export async function createSession(params: {
   userAgent?: string;
 }): Promise<Session> {

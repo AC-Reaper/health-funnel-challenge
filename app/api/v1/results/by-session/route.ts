@@ -10,25 +10,24 @@ import {
 import { getRequestId } from "@/lib/api/request-id";
 import { findResultBySessionId } from "@/lib/result-repo";
 import { serializeFull, serializeTeaser } from "@/lib/serializers/result";
-import { findSessionById } from "@/lib/session";
+import { findSessionById, isDemoSeedSession } from "@/lib/session";
 
 export const dynamic = "force-dynamic";
 
 /**
- * Demo / reviewer read by sessionId (ADR-018, brief §五-1c: "提供一个已支付
- * 的测试 sessionId，让我们能直接对比付费前后的差异化返回").
+ * Demo / reviewer read by sessionId (ADR-018/019, brief §五-1c: "提供一个
+ * 已支付的测试 sessionId，让我们能直接对比付费前后的差异化返回").
  *
  * The production read is the cookie-authenticated `GET /api/v1/results/me`.
  * This sibling lets a judge compare a paid vs free session by id WITHOUT a
  * cookie or any secret — exactly the pre/post-payment comparison the brief
- * asks for. It is safe to expose for the demo because:
- *   - it returns nothing `/results/me` doesn't (the SAME leak-tested
- *     `serializeTeaser` / `serializeFull`; teaser still cannot emit
- *     paid-only fields),
- *   - it is read-only (no grant, no write),
- *   - sessionIds are unguessable random UUIDs (`crypto.randomUUID()`),
- *     so this is not a meaningful enumeration surface for a $0 demo.
- * The cookie remains the real auth credential; this is a labelled demo aid.
+ * asks for. It is scoped to **demo-seeded sessions only** (ADR-019): a
+ * session is readable here iff its stored `user_agent` is the marker the
+ * seed script sends (`isDemoSeedSession`). A real visitor's session — even
+ * with a leaked or guessed UUID — returns 404, so this is not bearer
+ * read-access to arbitrary health data; the signed cookie stays the real
+ * credential for normal paths. It is also read-only and returns nothing
+ * `/results/me` doesn't (the SAME leak-tested serializers).
  */
 const Query = z.object({ sessionId: z.string().uuid() });
 
@@ -51,12 +50,15 @@ export async function GET(req: Request) {
 
     const sid = parsed.data.sessionId;
     const session = await findSessionById(sid);
-    if (!session) {
+    // Demo-scoped (ADR-019): only seeded demo sessions are readable by id.
+    // Collapse "not found" and "not a demo session" into one 404 so this
+    // endpoint never confirms the existence of a real visitor's session.
+    if (!session || !isDemoSeedSession(session.userAgent)) {
       return withNoStore(
         jsonError({
           status: 404,
           code: ERROR_CODES.NOT_FOUND,
-          message: "No session found for that id.",
+          message: "No demo session found for that id.",
           requestId,
         }),
       );

@@ -12,6 +12,10 @@
 #
 # and diff the paid (full) vs free (teaser) JSON.
 #
+# The sessions are created with a marker User-Agent ($DEMO_UA below) so that
+# `GET /api/v1/results/by-session` will read them (ADR-019): that endpoint
+# only returns demo-seeded sessions, never a real visitor's session by id.
+#
 # Usage:
 #   BASE=http://localhost:3000 scripts/seed-demo.sh
 #   BASE=https://<your-app>.vercel.app scripts/seed-demo.sh
@@ -20,6 +24,9 @@
 set -euo pipefail
 
 BASE="${BASE:-http://localhost:3000}"
+
+# Must match DEMO_SEED_USER_AGENT in lib/session.ts (ADR-019).
+DEMO_UA="health-funnel-demo-seed/1.0"
 
 command -v curl >/dev/null || { echo "error: curl is required" >&2; exit 1; }
 command -v jq   >/dev/null || { echo "error: jq is required"   >&2; exit 1; }
@@ -33,8 +40,9 @@ gen_key() {
 # Echoes the session UUID on stdout.
 run_funnel() {
   local jar="$1"
+  # Marker UA so the session is readable via GET /results/by-session (ADR-019).
   curl -fsS -c "$jar" -b "$jar" -X POST "$BASE/api/v1/sessions" \
-    -H "Content-Type: application/json" -d '{}' >/dev/null
+    -H "Content-Type: application/json" -H "User-Agent: $DEMO_UA" -d '{}' >/dev/null
 
   local steps=(
     'gender|{"gender":"female"}'
@@ -65,17 +73,29 @@ echo "Seeding demo sessions against $BASE ..." >&2
 
 # 1. Paid session: walk the funnel, then grant via the secret-free mock /pay.
 PAID_SID="$(run_funnel "$tmp/paid.jar")"
-curl -fsS -b "$tmp/paid.jar" -X POST "$BASE/api/v1/pay" \
+PAY_RES="$(curl -fsS -b "$tmp/paid.jar" -X POST "$BASE/api/v1/pay" \
   -H "Content-Type: application/json" \
-  -H "Idempotency-Key: $(gen_key)" -d '{}' >/dev/null
+  -H "Idempotency-Key: $(gen_key)" -d '{}')"
+PAYMENT_ID="$(echo "$PAY_RES" | jq -r .paymentId)"
+ENTITLEMENT="$(echo "$PAY_RES" | jq -r .entitlementStatus)"
 
 # 2. Free session: walk the funnel, leave it unpaid (teaser).
 FREE_SID="$(run_funnel "$tmp/free.jar")"
 
+# 3. Self-verify the promised contrast through the demo read (fail-fast):
+#    paid must be "full", free must be "teaser". This proves the deliverable
+#    rather than just printing IDs that might not differ on a broken env.
+PAID_KIND="$(curl -fsS "$BASE/api/v1/results/by-session?sessionId=$PAID_SID" | jq -r .kind)"
+FREE_KIND="$(curl -fsS "$BASE/api/v1/results/by-session?sessionId=$FREE_SID" | jq -r .kind)"
+if [ "$PAID_KIND" != "full" ] || [ "$FREE_KIND" != "teaser" ]; then
+  echo "error: contrast check failed — paid kind='$PAID_KIND' (want full), free kind='$FREE_KIND' (want teaser)" >&2
+  exit 1
+fi
+
 echo >&2
-echo "Done. Paste either id into the demo read to compare pre/post payment:" >&2
+echo "Verified: paid → full, free → teaser. Paste either id into the demo read:" >&2
 echo
-echo "PAID (full):   $PAID_SID"
+echo "PAID (full):   $PAID_SID   paymentId=$PAYMENT_ID  entitlementStatus=$ENTITLEMENT"
 echo "  $BASE/api/v1/results/by-session?sessionId=$PAID_SID"
 echo
 echo "FREE (teaser): $FREE_SID"
