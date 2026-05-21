@@ -2,10 +2,11 @@
 
 ## Status
 
-Resolved — reviewed PR #1, `feature/brief-compliance-pay` at `5c59e43`
-against `main` (`10b1dc3`). All findings (I001/I002/N001) addressed
-on-branch (ADR-019); see `reviews/resolved-review-items.md` → "review-016".
-Awaiting Codex closeout re-review before merge (grant/read-by-id surface).
+Open — original review covered PR #1, `feature/brief-compliance-pay` at
+`5c59e43` against `main` (`10b1dc3`). Closeout re-review at `b3a1d24`
+verifies I002 and N001 are fixed, but I001 remains partially open because
+`docs/02-architecture.md` still carries stale ADR-001…017 / pre-ADR-018
+status text.
 
 Scope reviewed:
 
@@ -35,18 +36,31 @@ Scope reviewed:
 
 ## Verification
 
-- `npm run typecheck` — pass.
-- `npm test` — pass, 251 tests.
-- `npm run build` — pass; route manifest includes `/api/v1/pay` and
+- Original review: `npm run typecheck` — pass.
+- Original review: `npm test` — pass, 251 tests.
+- Original review: `npm run build` — pass; route manifest includes `/api/v1/pay` and
   `/api/v1/results/by-session`.
-- `npm run db:validate` — pass.
-- `git diff --check main...HEAD` — pass.
-- Raw SQL grep still returns exactly one application callsite:
+- Original review: `npm run db:validate` — pass.
+- Original review: `git diff --check main...HEAD` — pass.
+- Original review: raw SQL grep still returns exactly one application callsite:
   `lib/payment.ts:200`.
-
-Live/DB verification not performed in this review. Closeout should run
-`BASE=<preview-or-live-url> npm run seed:demo` against a deployed branch
-and verify the paid/free `by-session` contrast.
+- Closeout re-review at `b3a1d24`: `npm run typecheck` — pass.
+- Closeout re-review at `b3a1d24`: `npm test` — pass, 255 tests.
+- Closeout re-review at `b3a1d24`: `npm run build` — pass; route manifest
+  still includes `/api/v1/pay` and `/api/v1/results/by-session`.
+- Closeout re-review at `b3a1d24`: `npm run db:validate` — pass.
+- Closeout re-review at `b3a1d24`: `git diff --check main...HEAD` — pass.
+- Closeout re-review at `b3a1d24`: raw SQL grep still returns exactly
+  `lib/payment.ts:200`.
+- Preview smoke against
+  `https://project-u415a-nrsua6m2q-jackz1.vercel.app/`:
+  - `BASE=<preview> npm run seed:demo` passes its self-check and prints a
+    paid/full session plus a free/teaser session.
+  - A normal non-seeded submitted session returns `404` from
+    `/api/v1/results/by-session` both before and after payment.
+  - Manual cookie-jar `POST /api/v1/pay` grants without
+    `PAYMENT_WEBHOOK_SECRET`; `/results/me` changes from `teaser` to
+    `full`.
 
 ## Findings
 
@@ -87,6 +101,15 @@ None.
   `docs/01` R-014 and out-of-scope text, add `/pay` to same-origin docs,
   and change webhook comments from "only grant path" to "production grant
   path".
+- Closeout at `b3a1d24`: Partially resolved. README, docs/01, docs/04,
+  docs/08, the webhook route comment, and memory status now use the
+  two-path ADR-018/019 model. However, `docs/02-architecture.md` still
+  says the decision gate and accepted-decisions section are ADR-001…017,
+  still describes pre-seeded paid sessionId as dropped in the status
+  header, and still says R8 is mitigated by ADR-001…017. Because docs/02
+  is a linked evaluator-facing architecture artifact, I001 remains open
+  until those remaining status/range lines are updated to ADR-001…019 and
+  the ADR-018/019 paid-sessionId scope.
 
 #### I002 — `results/by-session` exposes all submitted sessions by bare UUID, not just demo-seeded sessions
 
@@ -105,6 +128,12 @@ None.
   creation; make `GET /api/v1/results/by-session` return 404 or 403 unless
   `session.userAgent` matches that marker. Update README/docs to say
   `by-session` is for seeded demo sessions only.
+- Closeout at `b3a1d24`: Resolved. `lib/session.ts` defines
+  `DEMO_SEED_USER_AGENT` and `isDemoSeedSession`; the by-session route
+  returns the same `404 NOT_FOUND` for missing and non-demo sessions; the
+  seed script sends the marker UA at session creation; predicate tests
+  cover exact match, null, browser UA, and near-misses. Preview smoke
+  confirms a normal non-seeded submitted session id returns 404.
 
 ### Nice-to-have
 
@@ -121,6 +150,11 @@ None.
   `/api/v1/results/by-session` for each and fail fast unless paid is
   `full` and free is `teaser`. Optionally print the paid payment response
   fields if README/email copy claims `paymentId` / `entitlementStatus`.
+- Closeout at `b3a1d24`: Resolved. `seed:demo` now self-verifies
+  paid/full and free/teaser via `/results/by-session`, fails fast on a
+  mismatch, and prints the paid `paymentId` + `entitlementStatus`.
+  Preview smoke confirms the script passes against
+  `https://project-u415a-nrsua6m2q-jackz1.vercel.app/`.
 
 ## Closeout Checks
 
@@ -144,7 +178,8 @@ Live/DB closeout:
 
 ## Final Recommendation
 
-Do not merge yet. The implementation direction is sound and all local
-gates pass, but this branch touches the grant/read-by-id surface. Fix the
-remaining evaluator-facing doc contradictions and narrow `by-session` to
-seeded demo rows before merging to `main`.
+Do not merge yet. The grant/read-by-id implementation is now in good
+shape, and I002/N001 are verified fixed locally and on the preview. One
+Important documentation finding remains: finish the `docs/02-architecture.md`
+ADR-001…019/status cleanup so the architecture artifact no longer
+contradicts ADR-018/019.
