@@ -74,7 +74,7 @@ erDiagram
 
     RESULT {
         uuid          id PK
-        uuid          session_id FK,UQ
+        uuid          session_id FK,UK
         decimal_5_2   bmi
         bmi_category  bmi_category
         int           daily_calories_kcal
