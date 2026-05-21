@@ -17,6 +17,7 @@ UI fidelity.
 | **AI collaboration log** | [`docs/05-ai-collaboration-log.md`](docs/05-ai-collaboration-log.md) |
 | **Security review** | [`docs/08-security-hardening.md`](docs/08-security-hardening.md) |
 | **Prod audit** | `npm audit --omit=dev` → 0 vulnerabilities (Next.js 15.5.18 + pinned `postcss` override). |
+| **Paid test sessionId** | Run `BASE=<live-url> npm run seed:demo` to mint a paid + free session and print both ids, then diff them via `GET /api/v1/results/by-session?sessionId=<id>`. See [§Paid test session](#paid-test-session). |
 
 Want a working paid session against the live URL in ~30 seconds? Jump
 to [§Paid test session](#paid-test-session) below.
@@ -42,20 +43,22 @@ See `PROJECT_BRIEF.md` for the scoring criteria and MVP boundary, and
 | Database | PostgreSQL (Supabase Free) | Brief lists this combo; managed, free, no ops. |
 | ORM / migrations | Prisma | First-class TS types; checked-in migrations. |
 | Identity | Anonymous session, signed httpOnly cookie | Brief permits session/UUID; no real-auth scope creep. |
-| Payment | Mock provider with a **signature-verified webhook** (ADR-017): browser checkout → mock provider → HMAC-signed `payments/webhook` grants entitlement | Brief asks for mock; replay-safe by DB unique constraint. The browser cannot mint `paid` — only the signature-verified webhook can (the production-correct boundary), demonstrated without a real Stripe dependency. See `docs/08-security-hardening.md` §3.6. |
+| Payment | Two paths sharing one grant primitive: the brief's secret-free mock `POST /api/v1/pay` (ADR-018), **and** a production-grade **signature-verified webhook** (ADR-017) the browser UI drives (checkout → mock provider → HMAC-signed `payments/webhook`) | Brief asks for a directly-callable `/pay` *and* a replayable cURL; both replay-safe by DB unique constraint. The webhook shows the production boundary (browser cannot mint `paid` — only a signed callback can) without a real Stripe dependency. See `docs/08-security-hardening.md` §3.6. |
 | Hosting | Vercel (app) + Supabase (DB) | Free tier; public HTTPS URL out of the box; no VPS required. |
 
-Full decision history lives in `memory/decisions.md` (ADR-001…017).
+Full decision history lives in `memory/decisions.md` (ADR-001…019).
 
 ## Status
 
 Day 1–5 features shipped + delivery-compliance + production-hardening
 passes. Full funnel loop runs end-to-end against Supabase: anonymous
 session → 6-step browser quiz → submit → calculator → gated teaser →
-checkout → signature-verified webhook → full result. 250 unit tests
+checkout → signature-verified webhook → full result; plus the brief's
+secret-free mock `/pay` callback (ADR-018) for a replayable, no-secret
+reproducer. 255 unit tests
 green; live cookie-jar smoke covers happy + sad paths for every
 endpoint; the Codex review log (`docs/06-review-log.md`) is current
-through `review-013`, all Resolved; `npm audit --omit=dev` clean
+through `review-016`, all Resolved; `npm audit --omit=dev` clean
 (Next.js 15.5.18 + pinned `postcss` override). Production-hardening pass
 adds baseline security response headers (XCTO / XFO / Referrer-Policy /
 Permissions-Policy / CSP frame-ancestors), `Cache-Control: private,
@@ -63,9 +66,10 @@ no-store` on every personalised + error response, a 16 KB body-size
 cap (`413 PAYLOAD_TOO_LARGE`), 512-char `User-Agent` truncation, an
 optional `APP_ORIGIN` allowlist for `internalUrl()`, a
 Postgres-backed best-effort rate limiter on the hot write routes
-(`429 RATE_LIMITED` + `Retry-After`, ADR-016), and a payment trust
-boundary where entitlement is granted only by a signature-verified
-webhook — the browser checkout cannot mint `paid` (ADR-017) —
+(`429 RATE_LIMITED` + `Retry-After`, ADR-016), and a two-path payment
+model — the brief's secret-free mock `POST /api/v1/pay` (ADR-018) plus a
+production-style signature-verified webhook the browser checkout cannot
+bypass to mint `paid` (ADR-017) —
 `docs/08-security-hardening.md` §3.1–§3.6 has the falsifiable
 table.
 
@@ -128,7 +132,8 @@ npm run dev   # http://localhost:3000
 | `npm run build` | `prisma generate` + `next build` (used on Vercel) |
 | `npm run start` | Production server (after `npm run build`) |
 | `npm run typecheck` | `tsc --noEmit` |
-| `npm test` | Vitest, 250 unit tests |
+| `npm test` | Vitest, 255 unit tests |
+| `npm run seed:demo` | Seed a paid + free demo session against `$BASE`; prints both sessionIds |
 | `npm run db:deploy` | `prisma migrate deploy` against `DIRECT_URL` |
 
 Node 20 LTS is pinned via `.nvmrc`.
@@ -237,15 +242,41 @@ quiz**, complete six steps, hit **Pay** → the mock provider page →
 
 ## Paid test session
 
-Reproduces a paid session against `$BASE` end-to-end, condensed for
-copy-paste. Payment grants entitlement only via the signature-verified
-webhook (ADR-017); this block creates the checkout, then acts as the
-provider by signing + posting the webhook, and prints the `sessionId`.
-Set `$BASE` and `PAYMENT_WEBHOOK_SECRET` first:
+There are **two** ways to get a paid session and compare the pre/post-payment
+differentiated returns the brief asks for. The first needs **no secret** and
+is the recommended reproducer; the second demonstrates the production-grade
+signature-verified boundary.
+
+### Fastest: seed two sessions, then diff them
+
+```bash
+BASE="https://project-u415a.vercel.app" npm run seed:demo
+# prints a PAID and a FREE sessionId, e.g.:
+#   PAID (full):   3f1c…  →  $BASE/api/v1/results/by-session?sessionId=3f1c…
+#   FREE (teaser): 9a02…  →  $BASE/api/v1/results/by-session?sessionId=9a02…
+```
+
+`GET /api/v1/results/by-session?sessionId=<id>` is a **demo-only** read
+(no cookie, no secret) that returns the *same* leak-tested serializers as
+`/results/me` — `kind:"full"` for the paid id, `kind:"teaser"` for the
+free one — so a reviewer can diff them directly. It only reads
+**seeded demo sessions** (ADR-019): a real visitor's session id returns
+404, so this is not a back door into anyone's data — the cookie stays the
+real credential.
+
+```bash
+curl -sS "$BASE/api/v1/results/by-session?sessionId=<PAID>" | jq '.kind'   # "full"
+curl -sS "$BASE/api/v1/results/by-session?sessionId=<FREE>" | jq '.kind'   # "teaser"
+```
+
+### Manual: replayable `/pay` cURL (no secret)
+
+The brief's mock callback. Walk the funnel with a cookie jar, then `POST
+/api/v1/pay` with an `Idempotency-Key` to flip `entitlement_status` to
+`paid`:
 
 ```bash
 BASE="https://project-u415a.vercel.app"   # or http://localhost:3000
-PAYMENT_WEBHOOK_SECRET="…"                 # must match the server env
 JAR="$(mktemp)"
 
 # 1. Anonymous session (Set-Cookie hfc_session)
@@ -271,12 +302,33 @@ done
 curl -sS -b "$JAR" -X POST "$BASE/api/v1/sessions/me/submit" \
   -H 'Content-Type: application/json' -d '{}' > /dev/null
 
-# 4. Create a checkout (browser step — cannot grant access on its own)
-curl -sS -b "$JAR" -X POST "$BASE/api/v1/payments/checkout" \
-  -H 'Content-Type: application/json' -d '{}' | jq '{sessionId, amountCents, currency, status}'
+# 4. Teaser before paying
+curl -sS -b "$JAR" "$BASE/api/v1/results/me" | jq '.kind'   # "teaser"
 
-# 5. Act as the provider: sign + POST the webhook (the ONLY grant path).
-#    Needs PAYMENT_WEBHOOK_SECRET (matches the server env). ADR-017.
+# 5. Mock pay (replay-safe under the same Idempotency-Key). Flips paid.
+curl -sS -b "$JAR" -X POST "$BASE/api/v1/pay" \
+  -H 'Content-Type: application/json' -H "Idempotency-Key: $(uuidgen)" \
+  -d '{}' | jq '{sessionId, paymentId, entitlementStatus}'
+
+# 6. Full result after paying
+curl -sS -b "$JAR" "$BASE/api/v1/results/me" | jq '.kind'   # "full"
+```
+
+### Production-pattern variant: signature-verified webhook (needs the secret)
+
+`/pay` above is the brief's *mock*. In production, entitlement should be
+granted only by a signed provider callback — which is exactly what the
+browser UI drives (`/pay` page → `payments/checkout` → mock-provider page
+→ webhook, ADR-017). To exercise that path headlessly, set
+`PAYMENT_WEBHOOK_SECRET` to match the server env and replace steps 4–6
+above with:
+
+```bash
+# Create a checkout (browser step — cannot grant access on its own)
+curl -sS -b "$JAR" -X POST "$BASE/api/v1/payments/checkout" \
+  -H 'Content-Type: application/json' -d '{}' | jq '{sessionId, status}'
+
+# Act as the provider: sign + POST the webhook (the ONLY grant path here).
 SID=$(curl -sS -b "$JAR" "$BASE/api/v1/sessions/me" | jq -r .sessionId)
 PAYLOAD="{\"eventType\":\"checkout.completed\",\"sessionId\":\"$SID\",\"idempotencyKey\":\"$(uuidgen)\",\"amountCents\":999,\"currency\":\"USD\",\"status\":\"succeeded\"}"
 SIG="sha256=$(printf '%s' "$PAYLOAD" | openssl dgst -sha256 -hmac "$PAYMENT_WEBHOOK_SECRET" | sed 's/^.*= //')"
@@ -284,20 +336,26 @@ curl -sS -X POST "$BASE/api/v1/payments/webhook" \
   -H 'Content-Type: application/json' -H "X-Payment-Signature: $SIG" -d "$PAYLOAD" \
   | jq '{sessionId, paymentId, entitlementStatus}'
 
-# 6. Read the paid full result
-curl -sS -b "$JAR" "$BASE/api/v1/results/me" | jq
+# Negative: a bad signature is rejected → 401 (browser cannot mint paid).
+curl -sS -o /dev/null -w "%{http_code}\n" -X POST "$BASE/api/v1/payments/webhook" \
+  -H 'Content-Type: application/json' -H 'X-Payment-Signature: sha256=deadbeef' -d "$PAYLOAD"
 ```
 
-**On the auth model.** The `sessionId` printed above identifies the
-row; it is **not** an auth credential. The system uses a signed
-httpOnly cookie — every request in the block carries it via the
-shared `$JAR`. Hitting any endpoint with the bare `sessionId` and no
-cookie returns `401 NO_SESSION`:
+**On the auth model.** The `sessionId` is the row identifier; the real
+auth credential is the signed httpOnly cookie carried via `$JAR`. The
+`/results/me` read returns `401 NO_SESSION` without it:
 
 ```bash
 curl -sS "$BASE/api/v1/sessions/me"   # no -b "$JAR"
 # → {"error":{"code":"NO_SESSION", ...}}
 ```
+
+`GET /results/by-session` is the one endpoint that accepts a bare
+`sessionId` — a deliberately-scoped, read-only **demo aid** for §五-1c. It
+exposes nothing `/results/me` doesn't (same serializers), and it only
+reads **demo-seeded sessions** (those created by `seed:demo` with a marker
+User-Agent, ADR-019): a real visitor's session id returns 404, so a
+leaked/guessed UUID is not bearer read-access to their data.
 
 See [`docs/04-api-design.md`](docs/04-api-design.md) §Authentication
 and [`docs/08-security-hardening.md`](docs/08-security-hardening.md) §2
@@ -364,8 +422,8 @@ sessionId，复制 README §Paid test session 的 cURL 段落即可
 • Next.js 15 App Router + TypeScript + Zod + Prisma + Postgres
   (Supabase) + Vercel.
 • 匿名 session、HMAC-signed httpOnly cookie、server-side TTL。
-• 7 个 /api/v1 路由，全部 Zod 校验。
-• 250 个 vitest 单元；Codex 评审记录截至 review-013 全部 Resolved；`npm audit --omit=dev` 干净。
+• 10 个 /api/v1 路由，全部 Zod 校验。
+• 255 个 vitest 单元；Codex 评审记录截至 review-016 全部 Resolved；`npm audit --omit=dev` 干净。
 • 评审记录: docs/06-review-log.md。
 
 期待反馈。

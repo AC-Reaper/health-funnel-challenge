@@ -14,7 +14,8 @@
     "db:format": "prisma format",
     "db:validate": "prisma validate",
     "db:deploy": "prisma migrate deploy",
-    "db:reset": "prisma migrate reset --force"
+    "db:reset": "prisma migrate reset --force",
+    "seed:demo": "bash scripts/seed-demo.sh"
   },
   "dependencies": {
     "@prisma/client": "^5.22.0",

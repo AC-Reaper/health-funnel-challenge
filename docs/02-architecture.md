@@ -5,14 +5,17 @@
 > 2026-05-19 (ADR-009 Accepted-and-shipped, ADR-014 server-side cookie
 > TTL). Changes from v1: payment surface aligned to `/pay`; subscription
 > model collapsed into `session`; step-progress rule fixed to
-> first-incomplete-step; pre-seeded paid sessionId dropped in favour of a
-> cookie-jar cURL demo; `step_event` shipped Day 5 as minimal append-only
+> first-incomplete-step; `step_event` shipped Day 5 as minimal append-only
 > audit (T-502); cookie payload extended with `iat` for server-side TTL
-> (T-501, ADR-014).
+> (T-501, ADR-014). Later: the payment grant moved behind a
+> signature-verified webhook (ADR-017) and the brief's mock `POST /api/v1/pay`
+> was restored beside it (ADR-018); a paid test sessionId is now provided
+> via `npm run seed:demo` + the demo-scoped `GET /results/by-session`
+> (ADR-018/019), superseding the earlier "no pre-seeded paid sessionId".
 >
-> **Decision gate**: ADR-001…017 in `memory/decisions.md` are Accepted.
+> **Decision gate**: ADR-001…019 in `memory/decisions.md` are Accepted.
 
-## 0. Accepted decisions (ADR-001…017)
+## 0. Accepted decisions (ADR-001…019)
 
 The accepted decisions that frame this architecture live in
 `memory/decisions.md`. Short index — see ADR bodies for context,
@@ -29,7 +32,7 @@ rationale, and consequences:
 | ADR-007 | Entitlement model: `session.entitlement_status` + `paid_at`, no separate `subscription` table | Accepted |
 | ADR-008 | Step-progress rule: `current_step` = first incomplete required step | Accepted |
 | ADR-009 | `step_event` audit table — minimal version shipped Day 5 (T-502) | Accepted |
-| ADR-010 | No pre-seeded paid `sessionId`; README cookie-jar cURL walkthrough instead | Accepted |
+| ADR-010 | No pre-seeded paid `sessionId`; README cookie-jar cURL walkthrough instead (**superseded in part by ADR-018**: a paid test sessionId is now provided via `npm run seed:demo` + `GET /results/by-session`, matching brief §五-1c) | Accepted |
 | ADR-011 | Code management: feature branches + Conventional Commits + Codex review before merge | Accepted |
 | ADR-012 | Payment replay: already-paid sessions silently no-op for new `Idempotency-Key` | Accepted |
 | ADR-013 | Demo language and calculator defaults: English copy + Mifflin-St Jeor formula | Accepted |
@@ -37,6 +40,7 @@ rationale, and consequences:
 | ADR-015 | Framework patch baseline: Next.js 15.5.18 for prod audit hygiene (amends ADR-001 version only) | Accepted |
 | ADR-016 | Rate limiting: Postgres-backed best-effort fixed-window on hot write routes (reverses the earlier defer) | Accepted |
 | ADR-017 | Payment trust boundary: entitlement granted only by a signature-verified (simulated) provider webhook; browser checkout cannot (amends ADR-006) | Accepted |
+| ADR-018 | Brief-compliance: restore the brief's mock `POST /api/v1/pay` (secret-free, same-origin) alongside the webhook + add `GET /results/by-session` + seed for a paid test sessionId; subscription table & UX kept as documented trade-offs (amends ADR-010/017) | Accepted |
 
 ---
 
@@ -48,7 +52,7 @@ rationale, and consequences:
 2. 6-step funnel: `gender → main_goal → age → height → weight+target_weight → activity_level`. Each step validated and persisted on completion.
 3. Server-side computation on submit: BMI + category (WHO bands), daily calorie target (Mifflin–St Jeor × activity factor), realistic target-weight date (bounded weekly delta).
 4. Result page that is **server-gated**: free users see teaser (BMI + category + one-sentence narrative), paid users see full result (calories, target date, weight curve points).
-5. Mock payment (ADR-017): a browser route `/pay` creates a checkout (`POST /api/v1/payments/checkout`, which **cannot** grant), and a signature-verified `POST /api/v1/payments/webhook` is the only path that writes the `payment` row + sets `session.entitlement_status = 'paid'` in one transaction; subsequent `GET /api/v1/results/me` returns the full payload.
+5. Mock payment — two entry points over one transactional grant primitive (`processPayment`). The brief's directly-callable **mock** `POST /api/v1/pay` (ADR-018: same-origin + cookie + `Idempotency-Key`, secret-free) flips `session.entitlement_status = 'paid'` in one transaction. Separately, the production-grade path (ADR-017) the browser UI drives — `POST /api/v1/payments/checkout` (which **cannot** grant) → signature-verified `POST /api/v1/payments/webhook` — gates the same grant on a provider signature. Subsequent `GET /api/v1/results/me` (or the demo `GET /api/v1/results/by-session`) returns the full payload.
 6. Public Vercel URL + README with: setup, env vars, and a full cURL cookie-jar walkthrough (create → save steps → submit → teaser → pay → full). A separate Postman collection was scoped out — the cURL walkthrough is the canonical reproducer (see §9).
 
 **Out of scope** — see §9.
@@ -100,7 +104,7 @@ POST /api/v1/payments/checkout   ──► browser; creates order; CANNOT grant
 GET /checkout                    ──► mock provider page; "Confirm" runs a
        │                              server action that signs the event
        ▼
-POST /api/v1/payments/webhook    ──► ONLY grant path (ADR-017)
+POST /api/v1/payments/webhook    ──► production grant path (ADR-017)
        │     ├─ verify X-Payment-Signature (HMAC) — else 401
        │     ├─ re-check amount / currency / status — else 422
        │     └─ transaction: insert payment + set entitlement_status='paid'
@@ -108,6 +112,12 @@ POST /api/v1/payments/webhook    ──► ONLY grant path (ADR-017)
        ▼
 GET /api/v1/results/me           ──► full
 ```
+
+The diagram traces the browser flow (checkout → signed webhook). The
+brief's mock `POST /api/v1/pay` (ADR-018) is a parallel, secret-free
+grant entry into the **same** final transaction — same-origin + cookie +
+`Idempotency-Key` — provided for the replayable reviewer cURL; it is not
+the production trust boundary.
 
 The landing CTA is **state-aware** (`app/page.tsx` +
 `lib/landing-cta.ts:resolveLandingCta`): a returning visitor sees
@@ -210,13 +220,17 @@ The calculator is fixture-tested across the boundary set the validation layer ad
   else                                     → teaser serializer
   ```
   - Two separate serializer modules in `lib/serializers/result.ts`. The teaser serializer is **incapable** of emitting `daily_calories_kcal`, `predicted_target_date`, `curve_points_json`, or `plan_json` — these fields are not in its return type. A unit test JSON-stringifies the teaser response and asserts those substrings are absent, so a future drift cannot leak data through.
-- Entitlement is granted only by the signature-verified
-  `POST /api/v1/payments/webhook` (ADR-017): it verifies the
-  `X-Payment-Signature` HMAC over the raw body, re-checks
-  `amount_cents` / `currency` / `status` against the server constants
-  (never trusting the client), then runs the same single transaction
-  below via the unchanged `processPayment`. The browser
-  `POST /api/v1/payments/checkout` cannot grant.
+- Entitlement is granted through `processPayment` (the single
+  transaction below) from two entry points (ADR-018):
+  - the brief's mock `POST /api/v1/pay` — same-origin + cookie +
+    `Idempotency-Key`, secret-free, the directly-callable callback the
+    brief names; and
+  - the production-grade signature-verified
+    `POST /api/v1/payments/webhook` (ADR-017) — verifies the
+    `X-Payment-Signature` HMAC over the raw body, re-checks
+    `amount_cents` / `currency` / `status` against the server constants
+    (never trusting the client). This is the path the browser UI drives;
+    the browser `POST /api/v1/payments/checkout` cannot grant.
   ```
   BEGIN
     SELECT session FOR UPDATE
@@ -300,12 +314,12 @@ Each day ends at a Codex review trigger so quality is loaded throughout, not bol
 | - | - | - | - | - |
 | R1 | Supabase pooler vs Prisma migration mismatch | Med | High | Document both env vars Day 1; smoke-test `prisma migrate deploy` on Day 1, not Day 4. |
 | R2 | Day 4 UI slips → funnel feels untrustworthy, brief explicitly grades this | Med | High | Day 4 dedicated; copy + visual baseline sketched Day 1 in parallel; willing to drop 6→5 steps. |
-| R3 | payment looks toy, loses "支付回调闭环" points | Med | Med | Signature-verified provider webhook is the only grant path (ADR-017) + `idempotencyKey` + DB-enforced unique + single transaction + cookie-jar cURL doc. |
+| R3 | payment looks toy, loses "支付回调闭环" points | Med | Med | Brief's directly-callable mock `POST /api/v1/pay` (ADR-018, secret-free replayable cURL + seeded paid sessionId) **plus** a production-grade signature-verified webhook callback (ADR-017) showing the real trust boundary; both `idempotencyKey` + DB-enforced unique + single transaction. |
 | R4 | Calculator subtle bugs (BMI edges, unrealistic target date) | Med | Med | Pure function, versioned, fixture-tested; refuses to predict if Δ > 30% of current weight. |
 | R5 | Cookie identity = single device only; evaluator tries two browsers, gets confused | Low | Med | Documented limitation in README and §9. |
 | R6 | Vercel cold start makes first click feel broken | Low | Low | README tells the evaluator to hit `/healthz` first. |
 | R7 | Free-result endpoint leaks paid fields | Low | High | Two-serializer design + leak test in CI. |
-| R8 | Implementation starts before accepted ADRs are recorded → rework | Low | High | ADR-001…017 are accepted; future scope changes require new ADRs. |
+| R8 | Implementation starts before accepted ADRs are recorded → rework | Low | High | ADR-001…019 are accepted; future scope changes require new ADRs. |
 
 ---
 
@@ -323,9 +337,9 @@ Each day ends at a Codex review trigger so quality is loaded throughout, not bol
 | Email / notifications | No identity → no email. |
 | Admin dashboard | Not graded; Supabase SQL editor suffices. |
 | Sentry / APM | Vercel logs are enough for the demo window. |
-| ~~Rate limiting~~ — **now implemented** (ADR-016) | Postgres-backed best-effort fixed-window limiter on the hot write routes (`/sessions`, step PATCH, `/submit`, `payments/checkout`, `payments/webhook`); see `docs/08-security-hardening.md` §3.5. A dedicated store (Upstash/Vercel KV) remains the higher-throughput prod path but was not needed at demo scale. |
+| ~~Rate limiting~~ — **now implemented** (ADR-016) | Postgres-backed best-effort fixed-window limiter on the hot write routes (`/sessions`, step PATCH, `/submit`, `pay`, `payments/checkout`, `payments/webhook`); see `docs/08-security-hardening.md` §3.5. A dedicated store (Upstash/Vercel KV) remains the higher-throughput prod path but was not needed at demo scale. |
 | GraphQL / tRPC | Brief evaluates REST path/method design. Adding either would obscure that signal. |
-| Pre-seeded paid `sessionId` | Cookie-only auth makes a raw UUID unusable from outside the browser; replaced with a cURL cookie-jar walkthrough in the README. |
+| ~~Pre-seeded paid `sessionId`~~ — **now provided (ADR-018)** | Originally dropped (cookie-only auth made a raw UUID unusable). Re-added for brief §五-1c via `npm run seed:demo` (mints a paid + free session) and a read-only demo endpoint `GET /api/v1/results/by-session?sessionId=<id>` that returns the same leak-tested serializers — so a judge can diff paid vs free without a cookie. The cookie remains the real auth credential. |
 | UUIDv7 | No measurable benefit at this scale; using `crypto.randomUUID()` instead. |
 | Postman collection | The README cURL cookie-jar walkthrough is the canonical reproducer; a Postman collection would duplicate it without adding evaluator value. |
 

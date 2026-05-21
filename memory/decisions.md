@@ -187,7 +187,9 @@ Consequences:
 
 ## ADR-010: No pre-seeded paid `sessionId`
 
-Status: Accepted (2026-05-18)
+Status: Accepted (2026-05-18); **superseded in part by ADR-018 (2026-05-21)**
+— a paid test sessionId is now provided via `npm run seed:demo` +
+`GET /api/v1/results/by-session` to meet brief §五-1c.
 Supersedes: prior v1 plan to ship a fixed paid demo UUID.
 
 Context:
@@ -405,7 +407,9 @@ break the cURL reproducer and add a dependency + secrets late).
   action play the provider for the browser one-click: the secret + the
   signing live server-side only. The README cURL acts as the provider
   directly and demonstrates wrong-signature → 401.
-- `POST /api/v1/pay` is removed.
+- `POST /api/v1/pay` is removed. *(Superseded in part by ADR-018: `/pay`
+  is restored as the brief's secret-free mock callback alongside the
+  webhook; the webhook remains the production trust boundary.)*
 
 Reason:
 - Demonstrates the exact "browser can't mint paid; only a
@@ -425,3 +429,100 @@ Consequences:
   means replacing the mock-provider page + the signing in the server
   action with Stripe Checkout + `stripe.webhooks.constructEvent`; the
   webhook handler's verify→validate→processPayment shape stays.
+
+## ADR-018: Brief-compliance — restore mock `/pay`, add demo read + paid-sessionId seed
+
+Status: Accepted (2026-05-21, `feature/brief-compliance-pay`)
+
+Amends ADR-010 (no pre-seeded paid sessionId) and ADR-017 (webhook-only
+grant). Keeps ADR-007 (entitlement on `session`) and ADR-006/012
+(idempotency) intact; the grant primitive `processPayment` is unchanged.
+
+Context:
+Re-reading the original source brief (`../test.md`) against `main`
+surfaced three explicit deliverables we had drifted from when hardening
+the payment path into the webhook-only flow:
+- §三/§五-1b: a directly-callable `POST /api/v1/pay` that flips membership
+  + a *replayable* `/pay` cURL. We had deleted `/pay`, and the remaining
+  grant (webhook) needs `PAYMENT_WEBHOOK_SECRET`, which a judge running
+  the public URL does not hold — the cURL wall.
+- §五-1c: an already-paid test `sessionId` for pre/post comparison. We had
+  refused it (ADR-010).
+- §五-3: a subscription table — kept as a documented trade-off (docs/03
+  §2.1) this round.
+
+The brief literally calls `/pay` a "模拟支付回调" (mock payment callback),
+so a directly-callable mock `/pay` is *in spec*, not a regression.
+
+Decision:
+- Restore `POST /api/v1/pay` as the brief's **mock** callback:
+  same-origin + cookie + `Idempotency-Key`, secret-free, reusing the
+  unchanged `processPayment`. The browser UI keeps flowing through
+  checkout→webhook, so the live demo still never lets a button mint
+  `paid`; `/pay` is the documented reviewer/cURL callback.
+- Add `GET /api/v1/results/by-session?sessionId=<uuid>` — a read-only,
+  unauthenticated **demo aid** that returns the same leak-tested
+  teaser/full serializers as `/results/me`, so a judge can diff a paid vs
+  free id without a cookie.
+- Add `scripts/seed-demo.sh` (`npm run seed:demo`) — drives the real API
+  (create → 6 steps → submit → secret-free `/pay`) to mint a paid + a free
+  session and print both ids.
+
+Reason:
+- Meets all three live-demo deliverables and de-risks the demo: the `/pay`
+  path needs no secret, so it works even if `PAYMENT_WEBHOOK_SECRET` is
+  unset on Vercel. The webhook stays as the production-grade bonus.
+- Strongest answer to the challenge: deliver exactly what's asked *and*
+  show why production needs more (the signed webhook), without deleting
+  the good work.
+
+Consequences:
+- API surface: `/pay` back + `results/by-session` added (the build shows
+  both routes). `RATE_LIMITS.pay` (already present) reused.
+- No schema/migration change; `lib/payment.ts` and its tests untouched
+  (the grant primitive is shared). 251 tests unchanged (no route-test
+  harness; pure payment/serializer/leak suites cover the reused logic).
+- Two grant entry points now exist (mock `/pay`, signed webhook); docs/04
+  §6-§7 and docs/08 §3.6 are explicit that `/pay` is the mock and the
+  webhook is the production trust boundary.
+- Owner: run `BASE=<live-url> npm run seed:demo` once to mint the paid
+  sessionId for the submission; `PAYMENT_WEBHOOK_SECRET` is still needed
+  on Vercel for the *webhook* bonus only.
+
+## ADR-019: `GET /results/by-session` scoped to demo-seeded sessions
+
+Status: Accepted (2026-05-21, `feature/brief-compliance-pay`, review-016 I002)
+
+Refines ADR-018 (which introduced the unauthenticated demo read).
+
+Context:
+Codex review-016 I002 flagged that `GET /api/v1/results/by-session` as first
+shipped would return *any* submitted session's teaser/full result by bare
+UUID. UUIDs aren't guessable, but a leaked id (logs, screenshots, copied
+docs) would become bearer read-access to a real visitor's health data, and
+it contradicted the repo's "the signed cookie is the real credential" story.
+
+Decision:
+Scope the demo read to **demo-seeded sessions only**, reusing the
+already-persisted `session.user_agent` (set once at create-time) as the
+marker:
+- `lib/session.ts` exports `DEMO_SEED_USER_AGENT = "health-funnel-demo-seed/1.0"`
+  and a pure `isDemoSeedSession(ua)` (exact match), unit-tested in
+  `tests/lib/session.test.ts`.
+- `scripts/seed-demo.sh` sends `User-Agent: health-funnel-demo-seed/1.0` on
+  the `POST /api/v1/sessions` create call (the only call whose UA is stored).
+- The route returns `404 NOT_FOUND` when the session is null **or** not a
+  demo-seed session — collapsed into one branch so it never confirms a real
+  session's existence.
+
+Reason:
+- Closes the read-by-id surface to deliberately-seeded rows while still
+  meeting brief §五-1c (a paid test sessionId a judge can diff). Lowest-risk
+  fix: no schema change, reuses an existing column, adds a pure tested
+  predicate. A user could only "spoof" the marker for their *own* session,
+  which they could already read via cookie — no new exposure.
+
+Consequences:
+- `seed:demo` now also self-verifies the paid→full / free→teaser contrast
+  (fail-fast) and prints `paymentId` / `entitlementStatus` (review-016 N001).
+- Docs (README, docs/01/04/08) state the read is demo-seeded-only.

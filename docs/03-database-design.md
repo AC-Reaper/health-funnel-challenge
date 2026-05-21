@@ -18,7 +18,8 @@ table (`rate_limit`):
 - `assessment` — 1:1 with session; the user's quiz answers.
 - `result` — 1:1 with submitted session; immutable computation snapshot.
 - `payment` — N:1 with session; audit + idempotency for the mock
-  payment, written only from the signature-verified webhook (ADR-017).
+  payment, written via `processPayment` from the mock `/pay` (ADR-018) or
+  the signature-verified webhook (ADR-017).
 - `step_event` — N:1 with session; append-only audit of every successful
   PATCH on `/sessions/me/steps/:stepKey` (ADR-009, T-502, shipped Day 5).
 - `rate_limit` — **operational**, not a domain entity and not linked to
@@ -119,20 +120,30 @@ the referenced ADRs.
 | - | - | - |
 | User | Anonymous `session` row + HMAC-signed httpOnly cookie | ADR-004 |
 | Account / login flow | Out of scope | ADR-004 |
-| Subscription / Entitlement | `session.entitlement_status` (`free` / `paid`) + `session.paid_at` | ADR-007 |
+| Subscription / Entitlement (the brief's 订阅信息表) | `session.entitlement_status` (`free` / `paid`) + `session.paid_at` | ADR-007 |
 | Recurring subscription billing cycle | Out of scope (one-time mock) | ADR-006 |
-| Payment record | `payment` table — DB `UNIQUE (session_id, idempotency_key)` + partial unique index `payment_one_success_per_session_idx WHERE status='succeeded'`. The row is written only from the signature-verified webhook (ADR-017), never directly from the browser. | ADR-006, ADR-012, ADR-017 |
+| Payment record (the brief's 数据记录表 for billing) | `payment` table — DB `UNIQUE (session_id, idempotency_key)` + partial unique index `payment_one_success_per_session_idx WHERE status='succeeded'`. Written from the unchanged `processPayment` via either the mock `POST /api/v1/pay` (ADR-018) or the signature-verified webhook (ADR-017). | ADR-006, ADR-012, ADR-017, ADR-018 |
 | Step-progression audit | `step_event` (append-only, written inside the PATCH transaction) | ADR-009 |
 
-The collapse is intentional. The brief permits anonymous sessions and
-asks for a *mocked* payment, so a separate `user` table would add an
-auth surface that scores zero, and a separate `subscription` table
-would either duplicate `session.entitlement_status` or require a state
-machine for a non-existent billing cycle. The current shape preserves
-every scored behaviour (resume, idempotency, gated reads,
-replay-safety) with one fewer FK and one fewer migration than the
-brief's nominal data model — see `docs/02-architecture.md` §9
-"deliberately not doing".
+The collapse is intentional, not an oversight of the brief's three-table
+sketch (用户表 / 数据记录表 / 订阅信息表). The brief permits anonymous
+sessions and asks for a *mocked* payment, so a separate `user` table
+would add an auth surface that scores zero, and a separate `subscription`
+table would either duplicate `session.entitlement_status` or require a
+state machine for a non-existent billing cycle. The current shape
+preserves every scored behaviour (resume, idempotency, gated reads,
+replay-safety) with one fewer FK and one fewer migration than the brief's
+nominal data model.
+
+**Extension path** (kept explicit so the collapse reads as a judgement,
+not a gap): a real subscription model is an additive migration — a
+`subscription` table keyed by a future `user.id` with
+`(plan, status, current_period_end, cancel_at)`, and `session` gaining a
+nullable `user_id` FK. `session.entitlement_status` becomes a denormalised
+read-cache of the active subscription. No existing column changes type;
+the `payment` table already carries the money/idempotency columns a
+billing cycle needs. See `docs/02-architecture.md` §9 "deliberately not
+doing".
 
 ## 3. Entities
 
@@ -204,7 +215,8 @@ relies on the snapshot being frozen.
 Constraints, two layers:
 
 1. `UNIQUE (session_id, idempotency_key)` — makes the payment grant
-   (the signature-verified webhook, ADR-006/017) replay-safe by
+   (the mock `/pay` ADR-018 and the signature-verified webhook
+   ADR-006/017, sharing one `processPayment`) replay-safe by
    construction. Same-key replays converge on the same row via
    `INSERT … ON CONFLICT DO NOTHING`.
 2. `payment_one_success_per_session_idx` — a **partial unique index** on

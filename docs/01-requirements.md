@@ -28,7 +28,7 @@
 | R-011 | The system shall return a teaser result to free sessions and a full result to paid sessions. | Brief §三.3; Research §4 | Before payment, `GET /api/v1/results/me` returns `kind = "teaser"` with BMI/category/headline only; after payment it returns `kind = "full"` with calories/date/curve/plan/version. |
 | R-012 | The system shall guarantee that teaser responses cannot leak paid-only fields. | Brief §三.3; Research §4 | A leak test JSON-serializes the teaser and asserts `dailyCaloriesKcal`, `predictedTargetDate`, `curvePoints`, `plan`, and `algorithmVersion` are absent. |
 | R-013 | The system shall provide a browser `/pay` route that lets a submitted free user trigger mock payment. | Brief §三.3; API §6 | Visiting `/pay` without a session redirects to `/`; visiting after submit renders the mock payment CTA and redirects to `/results` after successful pay. |
-| R-014 | The system shall grant paid entitlement only via a signature-verified provider webhook (`POST /api/v1/payments/webhook`) in one transaction; the browser `POST /api/v1/payments/checkout` cannot grant. | Brief §三.3; ADR-006, ADR-017 | A signed webhook event inserts one payment row, sets `session.entitlement_status = "paid"` + `paid_at`, and makes the next result read full; checkout alone leaves the result on teaser; a bad signature returns 401 and does not grant. |
+| R-014 | The system shall grant paid entitlement through one transaction (`processPayment`) reachable from two paths: the brief's directly-callable mock `POST /api/v1/pay` (same-origin + cookie + `Idempotency-Key`, secret-free) and the production-style signature-verified webhook (`POST /api/v1/payments/webhook`). The browser `POST /api/v1/payments/checkout` cannot grant. | Brief §三.3; ADR-006, ADR-017, ADR-018 | Either `POST /api/v1/pay` (cookie + `Idempotency-Key`) or a signed webhook event inserts one payment row, sets `session.entitlement_status = "paid"` + `paid_at`, and makes the next result read full; checkout alone leaves the result on teaser; a bad webhook signature returns 401 and does not grant. |
 | R-015 | The system shall make payment replay-safe with `Idempotency-Key`. | ADR-006; ADR-012 | Reusing the same key returns the same payment; using a new key after paid returns `200` without inserting a second payment row. |
 | R-016 | The system shall expose a public liveness endpoint. | Brief §四; API §8 | `GET /api/v1/healthz` returns `200` with `{ status: "ok", version, ts }` without requiring a cookie. |
 | R-017 | The system shall ship a reproducible live demo path. | Brief §五.1 | README cookie-jar cURL flow creates a session, saves six steps, submits, reads teaser, pays, and reads full result against the public URL. |
@@ -116,8 +116,10 @@ The following are intentionally out of MVP scope. See
 - Real auth: email, OAuth, magic links, accounts, password reset.
 - Real payment provider, webhooks, refunds, invoices, or recurring
   subscription lifecycle.
-- Cross-device resume or a raw paid `sessionId` that works without the
-  signed cookie.
+- Cross-device resume. (A paid test `sessionId` *is* provided per brief
+  §五-1c, but only for **demo-seeded** sessions via the read-only
+  `GET /api/v1/results/by-session`, ADR-018/019 — a real visitor's session
+  is still readable only with the signed cookie.)
 - Email capture, notifications, CRM, or marketing automation.
 - ML-generated health plans or opaque recommendation engines.
 - Admin dashboard, analytics dashboards, A/B testing UI, or growth
