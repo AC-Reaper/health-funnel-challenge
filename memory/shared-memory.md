@@ -92,10 +92,10 @@ result after payment.
 - Browser pages → `app/page.tsx`, `app/funnel/**`, `app/pay/{page,PayButton}.tsx`, `app/checkout/{page,ConfirmButton,actions}.ts(x)` (mock provider), `app/results/page.tsx`
 - Step audit → `step_event` model + `20260519000000_add_step_event`
   migration (ADR-009 accepted on Day 5)
-- Test suite → `tests/**` (vitest, 250 tests on `feature/payment-webhook`)
+- Test suite → `tests/**` (vitest, 251 tests on `feature/payment-webhook`)
 - ADR log → `memory/decisions.md` (ADR-001…017 Accepted)
 - Open questions → `memory/open-questions.md` (no open blocker)
-- Latest reviews → `reviews/review-015-payment-webhook.md` (Open at `308f02c`: 0 Blocking, 3 Important, 1 Nice-to-have); `reviews/review-014-rate-limit.md` (Resolved, merged to `main` @ `ffdab50`); `reviews/review-013-landing-cta.md` (Resolved, merged); `reviews/review-012-security-polish.md` (Resolved, merged); earlier reviews are resolved for their branches.
+- Latest reviews → `reviews/review-015-payment-webhook.md` (Resolved at `a220c6b`); `reviews/review-014-rate-limit.md` (Resolved, merged to `main` @ `ffdab50`); `reviews/review-013-landing-cta.md` (Resolved, merged); `reviews/review-012-security-polish.md` (Resolved, merged); earlier reviews are resolved for their branches.
 
 ## Current Branch
 
@@ -125,13 +125,13 @@ granted only by a signature-verified provider webhook.
   (status, tech-stack, §Paid test session rewritten — checkout +
   openssl-signed webhook + wrong-sig→401).
 
-Verification: `tsc --noEmit` clean, `npm test` 250 green, `next build`
+Verification: `tsc --noEmit` clean, `npm test` 251 green, `next build`
 clean (/pay gone; payments/checkout + payments/webhook + /checkout
 added), `npx prisma validate` clean, `git diff --check` clean. openssl
 HMAC recipe verified to byte-match the server `signWebhookPayload`.
 New env `PAYMENT_WEBHOOK_SECRET` in local `.env`; Owner sets it on
-Vercel. Codex review-015 is Open: fix checkout body validation, webhook
-idempotency-key validation, and current-doc route drift before merge.
+Vercel. Codex review-015 is Resolved at `a220c6b`; branch is mergeable
+from the payment-webhook review perspective.
 
 Prior post-MVP work (all merged to `main`): rate limiting (review-014),
 state-aware landing CTA (review-013), security-polish (review-012),

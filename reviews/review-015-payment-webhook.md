@@ -5,6 +5,7 @@
 Resolved — reviewed `feature/payment-webhook` at `308f02c`; all three
 Important (I001/I002/I003) + the Nice-to-have (N001) fixed on-branch.
 See `reviews/resolved-review-items.md` → "review-015".
+Closeout re-review completed at `a220c6b`.
 
 Original review (Open) reviewed `feature/payment-webhook` at `308f02c`.
 
@@ -39,21 +40,35 @@ Scope reviewed:
 
 ## Verification
 
-- `npm run typecheck` — pass.
-- `npm test` — pass, 250 tests.
-- `npm run build` — pass; route list includes
+- Closeout at `a220c6b`: `npm run typecheck` — pass.
+- Closeout at `a220c6b`: `npm test` — pass, 251 tests.
+- Closeout at `a220c6b`: `npm run build` — pass; route list includes
   `/api/v1/payments/checkout`, `/api/v1/payments/webhook`, and
   `/checkout`; old `/api/v1/pay` is gone.
-- `npm run db:validate` — pass.
-- `git diff --check main...HEAD` — pass.
+- Closeout at `a220c6b`: `npm run db:validate` — pass.
+- Closeout at `a220c6b`: `git diff --check main...HEAD` — pass.
+- Closeout at `a220c6b`: raw-query grep still returns exactly one
+  application callsite: `lib/payment.ts:200`.
+- Code re-review verifies I001/I002/I003/N001 are fixed:
+  `POST /api/v1/payments/checkout` parses `z.object({}).strict()` via
+  `parseJsonBody`; webhook `idempotencyKey` reuses
+  `IDEMPOTENCY_KEY_SCHEMA`; invalid signed webhook events map to stable
+  `404 NOT_FOUND` / `409 NOT_SUBMITTED`; current docs route the paid
+  session proof through checkout plus signed webhook instead of the
+  removed `POST /api/v1/pay`.
 - Preview smoke against
-  `https://project-u415a-gv3cujs4a-jackz1.vercel.app/`:
+  `https://project-u415a-24xgpmpdq-jackz1.vercel.app/`:
   - `GET /api/v1/healthz` → 200.
   - old `POST /api/v1/pay` → 404.
   - bad-signature `POST /api/v1/payments/webhook` → 401.
-  - no-cookie `POST /api/v1/payments/checkout` → 401.
   - fresh session → six steps → submit → teaser → checkout:
-    checkout returns `pending`, and `GET /results/me` remains `teaser`.
+    checkout rejects extra body fields with 422, accepts `{}` with
+    `status: "pending"`, and `GET /results/me` remains `teaser`.
+- Direct signed-success webhook cURL against preview was not verified:
+  signing with the local `.env` `PAYMENT_WEBHOOK_SECRET` correctly
+  returns 401 because the preview secret differs. The signed-success path
+  is covered by code review, unit tests, and the server-action mock
+  provider path that keeps the secret server-side.
 
 ## Findings
 
@@ -78,6 +93,10 @@ None.
   run `parseJsonBody(req, CheckoutBody, requestId)` after rate limit and
   before returning any checkout success. Add at least one regression that
   proves `{ "extra": true }` or malformed JSON cannot create a checkout.
+- Closeout: Resolved at `a220c6b`. The checkout route now runs
+  `parseJsonBody(req, z.object({}).strict(), requestId)` before session
+  readiness checks; preview smoke confirms `{ "extra": true }` returns
+  422 while `{}` returns `pending`.
 
 #### I002 — Webhook idempotency keys bypass the printable-ASCII hardening
 
@@ -93,6 +112,9 @@ None.
 - Suggested fix: Reuse `IDEMPOTENCY_KEY_SCHEMA` for
   `WEBHOOK_PAYLOAD_SCHEMA.idempotencyKey` or apply the same printable-ASCII
   refinement. Add tests for `"\n"`, `"\0"`, and a non-ASCII key.
+- Closeout: Resolved at `a220c6b`. `WEBHOOK_PAYLOAD_SCHEMA` now reuses
+  `IDEMPOTENCY_KEY_SCHEMA`, with regressions for newline, NUL, non-ASCII,
+  and a valid printable key.
 
 #### I003 — Current docs and memory still contradict ADR-017 in several places
 
@@ -120,6 +142,10 @@ None.
   block, `docs/08` proof table, `docs/03` payment-index wording, and
   `memory/shared-memory` final flow. Historical review files can stay
   historical; current docs should not point to a deleted endpoint.
+- Closeout: Resolved at `a220c6b`. Current docs and shared memory now
+  describe checkout plus signed webhook as the grant path. Remaining
+  `api/v1/pay` mentions are historical review/ADR context or branch-name
+  references, not current instructions.
 
 ### Nice-to-have
 
@@ -136,11 +162,11 @@ None.
   session and return `404 NOT_FOUND` / `409 NOT_SUBMITTED`, or make
   `processPayment()` throw typed errors that the webhook route maps to
   stable 4xx envelopes.
+- Closeout: Resolved at `a220c6b`. The webhook route pre-reads the
+  session after signature/schema validation and returns `404 NOT_FOUND`
+  for unknown sessions and `409 NOT_SUBMITTED` for unsubmitted sessions.
 
 ## Final Recommendation
 
-Do not merge yet. The runtime grant boundary is directionally good, but
-the new checkout endpoint needs the same Zod/body discipline as the rest of
-the API, the webhook idempotency key should reuse the prior printable-ASCII
-hardening, and the current docs must stop advertising the removed
-`POST /api/v1/pay` path.
+No Blocking, Important, or Nice-to-have findings remain. The branch is
+mergeable from the review-015 perspective.
