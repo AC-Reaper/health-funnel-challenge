@@ -17,7 +17,7 @@ UI fidelity.
 | **AI collaboration log** | [`docs/05-ai-collaboration-log.md`](docs/05-ai-collaboration-log.md) |
 | **Security review** | [`docs/08-security-hardening.md`](docs/08-security-hardening.md) |
 | **Prod audit** | `npm audit --omit=dev` → 0 vulnerabilities (Next.js 15.5.18 + pinned `postcss` override). |
-| **Paid test sessionId** | Run `BASE=<live-url> npm run seed:demo` to mint a paid + free session and print both ids, then diff them via `GET /api/v1/results/by-session?sessionId=<id>`. See [§Paid test session](#paid-test-session). |
+| **Paid test sessionId** | **Paid:** `1f930fbf-8b4e-40d8-ad92-49a76233d19e` · **Free:** `d268309a-3edb-4efa-92a3-3b7ca40c08bb`. Diff them with no cookie/secret: [paid → full](https://project-u415a.vercel.app/api/v1/results/by-session?sessionId=1f930fbf-8b4e-40d8-ad92-49a76233d19e) vs [free → teaser](https://project-u415a.vercel.app/api/v1/results/by-session?sessionId=d268309a-3edb-4efa-92a3-3b7ca40c08bb). To mint a fresh pair: `BASE=https://project-u415a.vercel.app npm run seed:demo`. See [§Paid test session](#paid-test-session). |
 
 Want a working paid session against the live URL in ~30 seconds? Jump
 to [§Paid test session](#paid-test-session) below.
@@ -247,14 +247,21 @@ differentiated returns the brief asks for. The first needs **no secret** and
 is the recommended reproducer; the second demonstrates the production-grade
 signature-verified boundary.
 
-### Fastest: seed two sessions, then diff them
+### Fastest: use the pre-seeded pair (or mint a fresh one)
+
+A paid + free session are already seeded in the production DB — diff them
+directly (no cookie, no secret):
 
 ```bash
-BASE="https://project-u415a.vercel.app" npm run seed:demo
-# prints a PAID and a FREE sessionId, e.g.:
-#   PAID (full):   3f1c…  →  $BASE/api/v1/results/by-session?sessionId=3f1c…
-#   FREE (teaser): 9a02…  →  $BASE/api/v1/results/by-session?sessionId=9a02…
+BASE="https://project-u415a.vercel.app"
+PAID="1f930fbf-8b4e-40d8-ad92-49a76233d19e"   # → kind:"full"
+FREE="d268309a-3edb-4efa-92a3-3b7ca40c08bb"   # → kind:"teaser"
+curl -sS "$BASE/api/v1/results/by-session?sessionId=$PAID" | jq '.kind'   # "full"
+curl -sS "$BASE/api/v1/results/by-session?sessionId=$FREE" | jq '.kind'   # "teaser"
 ```
+
+To mint a fresh pair instead, `BASE="$BASE" npm run seed:demo` prints a new
+PAID/FREE sessionId and self-verifies the full/teaser contrast.
 
 `GET /api/v1/results/by-session?sessionId=<id>` is a **demo-only** read
 (no cookie, no secret) that returns the *same* leak-tested serializers as
@@ -263,11 +270,6 @@ free one — so a reviewer can diff them directly. It only reads
 **seeded demo sessions** (ADR-019): a real visitor's session id returns
 404, so this is not a back door into anyone's data — the cookie stays the
 real credential.
-
-```bash
-curl -sS "$BASE/api/v1/results/by-session?sessionId=<PAID>" | jq '.kind'   # "full"
-curl -sS "$BASE/api/v1/results/by-session?sessionId=<FREE>" | jq '.kind'   # "teaser"
-```
 
 ### Manual: replayable `/pay` cURL (no secret)
 
